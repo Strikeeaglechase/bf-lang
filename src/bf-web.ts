@@ -1,4 +1,4 @@
-import { Op } from "./bf.js";
+import { Op, optimize } from "./bf.js";
 const X_SPACE = 25;
 const Y_SPACE = 20;
 const OP_X_SPACE = 15;
@@ -9,25 +9,44 @@ class Brainfuck {
 	ptr: number = 0;
 	idx: number = 0;
 	log: string = "";
+	optimize = false;
 	constructor(src: string) {
 		this.ops = src.split("") as Op[];
 	}
-	exec(code: string) {
+	exec(code: string, doOpt = false) {
 		this.ops = code.split("").filter(c => ops.includes(c)) as Op[];
 		this.mem = new Array(2 ** 16).fill(0);
 		this.idx = 0;
 		this.ptr = 0;
 		this.log = "";
+		this.optimize = doOpt;
+		if (this.optimize) {
+			this.ops = optimize(this.ops.join("")) as Op[]; // Lie about type
+		}
 	}
-	execute(steps: number, idxBack?: number) {
+	execute(steps: number) {
 		let curSteps = 0;
 		while (this.idx < this.ops.length && curSteps++ < steps) {
-			const op = this.ops[this.idx++];
+			const op = this.ops[this.idx++][0];
 			switch (op) {
 				case "+": this.mem[this.ptr]++; break;
 				case "-": this.mem[this.ptr]--; break;
-				case ">": this.ptr++; break;
-				case "<": this.ptr--; break;
+				case ">":
+					if (this.optimize) {
+						const amt = parseInt(this.ops[this.idx - 1].substring(1));
+						this.ptr += amt;
+					} else {
+						this.ptr++;
+					}
+					break;
+				case "<":
+					if (this.optimize) {
+						const amt = parseInt(this.ops[this.idx - 1].substring(1));
+						this.ptr -= amt;
+					} else {
+						this.ptr--;
+					}
+					break;
 				case ".":
 					console.log(this.mem[this.ptr]);
 					// this.log += String.fromCharCode(this.mem[this.ptr]);
@@ -92,7 +111,7 @@ function draw() {
 			ctx.fillStyle = "#ffffff";
 		}
 		ctx.fillText(bf.ops[i], x, y);
-		x += OP_X_SPACE;
+		x += ctx.measureText(bf.ops[i]).width + 5;
 		if (x > canvas.width - X_SPACE * 2) {
 			x = X_SPACE * 1.5;
 			y += Y_SPACE;

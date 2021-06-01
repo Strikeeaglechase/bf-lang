@@ -1,3 +1,31 @@
+const toOptimize = [">", "<"];
+function optimize(str) {
+    const ops = str.split("");
+    const out = [];
+    let cur = null;
+    let count = 0;
+    for (let i = 0; i < ops.length; i++) {
+        if (toOptimize.includes(ops[i])) {
+            if (ops[i] == cur) {
+                count++;
+            }
+            else {
+                if (cur)
+                    out.push(cur + count);
+                count = 1;
+                cur = ops[i];
+            }
+        }
+        else {
+            if (cur)
+                out.push(cur + count);
+            out.push(ops[i]);
+            cur = null;
+            count = 0;
+        }
+    }
+    return out;
+}
 class Brainfuck {
     constructor(src) {
         this.mem = new Array(Math.pow(2, 16)).fill(0);
@@ -47,7 +75,7 @@ class Brainfuck {
             this.ops[this.idx++] == "[" ? d++ : this.ops[this.idx - 1] == "]" ? d-- : null;
     }
 }
-const bf = new Brainfuck("+[>+++[>+++<-]]");
-bf.execute();
-console.log(bf.mem);
-export {};
+// const bf = new Brainfuck("+[>+++[>+++<-]]");
+// bf.execute();
+// console.log(bf.mem);
+export { optimize };

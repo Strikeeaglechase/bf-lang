@@ -1,3 +1,4 @@
+import { optimize } from "./bf.js";
 const X_SPACE = 25;
 const Y_SPACE = 20;
 const OP_X_SPACE = 15;
@@ -8,19 +9,24 @@ class Brainfuck {
         this.ptr = 0;
         this.idx = 0;
         this.log = "";
+        this.optimize = false;
         this.ops = src.split("");
     }
-    exec(code) {
+    exec(code, doOpt = false) {
         this.ops = code.split("").filter(c => ops.includes(c));
         this.mem = new Array(Math.pow(2, 16)).fill(0);
         this.idx = 0;
         this.ptr = 0;
         this.log = "";
+        this.optimize = doOpt;
+        if (this.optimize) {
+            this.ops = optimize(this.ops.join("")); // Lie about type
+        }
     }
-    execute(steps, idxBack) {
+    execute(steps) {
         let curSteps = 0;
         while (this.idx < this.ops.length && curSteps++ < steps) {
-            const op = this.ops[this.idx++];
+            const op = this.ops[this.idx++][0];
             switch (op) {
                 case "+":
                     this.mem[this.ptr]++;
@@ -29,10 +35,22 @@ class Brainfuck {
                     this.mem[this.ptr]--;
                     break;
                 case ">":
-                    this.ptr++;
+                    if (this.optimize) {
+                        const amt = parseInt(this.ops[this.idx - 1].substring(1));
+                        this.ptr += amt;
+                    }
+                    else {
+                        this.ptr++;
+                    }
                     break;
                 case "<":
-                    this.ptr--;
+                    if (this.optimize) {
+                        const amt = parseInt(this.ops[this.idx - 1].substring(1));
+                        this.ptr -= amt;
+                    }
+                    else {
+                        this.ptr--;
+                    }
                     break;
                 case ".":
                     console.log(this.mem[this.ptr]);
@@ -106,7 +124,7 @@ function draw() {
             ctx.fillStyle = "#ffffff";
         }
         ctx.fillText(bf.ops[i], x, y);
-        x += OP_X_SPACE;
+        x += ctx.measureText(bf.ops[i]).width + 5;
         if (x > canvas.width - X_SPACE * 2) {
             x = X_SPACE * 1.5;
             y += Y_SPACE;
@@ -115,7 +133,6 @@ function draw() {
     bf.execute(1);
 }
 draw();
-export {};
 /*
 bf.exec(`
 +>+

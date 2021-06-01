@@ -1,4 +1,28 @@
 type Op = "+" | "-" | "<" | ">" | "[" | "]" | ".";
+const toOptimize: Op[] = [">", "<"]
+function optimize(str: string): string[] {
+	const ops = str.split("") as Op[];
+	const out = [];
+	let cur = null;
+	let count = 0;
+	for (let i = 0; i < ops.length; i++) {
+		if (toOptimize.includes(ops[i])) {
+			if (ops[i] == cur) {
+				count++;
+			} else {
+				if (cur) out.push(cur + count);
+				count = 1;
+				cur = ops[i];
+			}
+		} else {
+			if (cur) out.push(cur + count);
+			out.push(ops[i]);
+			cur = null;
+			count = 0;
+		}
+	}
+	return out;
+}
 class Brainfuck {
 	ops: Op[];
 	mem: number[] = new Array(2 ** 16).fill(0);
@@ -34,7 +58,7 @@ class Brainfuck {
 	}
 }
 
-const bf = new Brainfuck("+[>+++[>+++<-]]");
-bf.execute();
-console.log(bf.mem);
-export { Op }
+// const bf = new Brainfuck("+[>+++[>+++<-]]");
+// bf.execute();
+// console.log(bf.mem);
+export { Op, optimize }
