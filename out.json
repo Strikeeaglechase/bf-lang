@@ -1,0 +1,30 @@
+{
+	"type": "prog",
+	"inside": [{
+		"type": "varDeclare",
+		"name": "x",
+		"value": {
+			"type": "expression",
+			"op": "*",
+			"left": {
+				"type": "value",
+				"value": 5
+			},
+			"right": {
+				"type": "expression",
+				"op": "+",
+				"left": {
+					"type": "value",
+					"value": 4
+				},
+				"right": {
+					"type": "value",
+					"value": 3
+				}
+			}
+		}
+	}, {
+		"type": "value",
+		"value": 2
+	}]
+}
