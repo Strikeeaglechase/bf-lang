@@ -59,8 +59,8 @@ const bf = new Brainfuck("");
 // @ts-ignore
 window.bf = bf;
 function draw() {
-	setTimeout(() => requestAnimationFrame(draw), 200);
-	// requestAnimationFrame(draw);
+	// setTimeout(() => requestAnimationFrame(draw), 200);
+	requestAnimationFrame(draw);
 	canvas.width = window.innerWidth;
 	canvas.height = window.innerHeight;
 

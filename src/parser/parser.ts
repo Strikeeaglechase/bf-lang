@@ -86,6 +86,10 @@ class Parser {
 				return this.expression(ast, leftPrec);
 			}
 		}
+		// We are "parsing" the ) by dropping out of this expression
+		// need to make sure that the expression one up is not poluted
+		// by reparsing the parenth
+		if (token == ")") this.stream.next();
 		return left;
 	}
 }

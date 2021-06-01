@@ -11,7 +11,8 @@ const B_OFFSET = 2;
 class Compiler {
     constructor(prog) {
         this.vars = [];
-        this.varIdx = VAR_SPACE_START;
+        // We start at the end of the var space as its more efficent
+        this.varIdx = VAR_SPACE_START + VAR_SPACE_LEN - 1;
         this.mathIdx = MATH_SEG_START;
         this.currentMemAddr = 0;
         this.code = "";
@@ -35,7 +36,7 @@ class Compiler {
     createVar(newVar) {
         const newVarDef = {
             name: newVar.name,
-            idx: this.varIdx++
+            idx: this.varIdx--
         };
         this.vars.push(newVarDef);
         // Need to assign default var value
@@ -115,7 +116,6 @@ class Compiler {
     }
     // Assigns the value of the current mem loc
     makeValue(value) {
-        this.note(`Make ${value}`);
         this.code += `[-]`; // Set cell to zero
         this.code += `+`.repeat(value);
     }
