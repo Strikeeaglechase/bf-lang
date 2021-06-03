@@ -14,11 +14,12 @@ var TokenType;
     TokenType["name"] = "name";
     TokenType["break"] = "break";
 })(TokenType || (TokenType = {}));
-const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*"];
-const keywords = ["if", "let", "func"];
+const filterChars = ["\t"];
+const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
+const keywords = ["if", "let", "func", "ret"];
 class Tokenizer {
     constructor(input) {
-        this.stream = new Stream(input.split(""));
+        this.stream = new Stream(input.split("").filter(c => !filterChars.includes(c)));
     }
     parse() {
         const tokens = [];
@@ -34,10 +35,6 @@ class Tokenizer {
             else if (!isNaN(parseInt(char))) {
                 // Have start of number, get the rest of it and push token
                 tokens.push({ type: TokenType.value, value: this.getNumber(), index: this.stream.idx });
-            }
-            else if (char == "\"") {
-                // Start of a string value
-                tokens.push({ type: TokenType.value, value: this.getString(), index: this.stream.idx });
             }
             else if (char != " ") {
                 // Char is keyword?

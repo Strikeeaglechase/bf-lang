@@ -1,4 +1,4 @@
-type Op = "+" | "-" | "<" | ">" | "[" | "]" | ".";
+type Op = "+" | "-" | "<" | ">" | "[" | "]" | "." | "!";
 const toOptimize: Op[] = [">", "<"]
 function optimize(str: string): string[] {
 	const ops = str.split("") as Op[];

@@ -15,15 +15,16 @@ enum TokenType {
 }
 interface Token {
 	type: TokenType,
-	value: string | number | boolean;
+	value: string | number;
 	index: number;
 }
-const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*"];
-const keywords = ["if", "let", "func"];
+const filterChars = ["\t"];
+const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
+const keywords = ["if", "let", "func", "ret"];
 class Tokenizer {
 	stream: Stream<string>;
 	constructor(input: string) {
-		this.stream = new Stream(input.split(""));
+		this.stream = new Stream(input.split("").filter(c => !filterChars.includes(c)));
 	}
 	parse(): Stream<Token> {
 		const tokens: Token[] = [];
@@ -37,9 +38,6 @@ class Tokenizer {
 			} else if (!isNaN(parseInt(char))) {
 				// Have start of number, get the rest of it and push token
 				tokens.push({ type: TokenType.value, value: this.getNumber(), index: this.stream.idx });
-			} else if (char == "\"") {
-				// Start of a string value
-				tokens.push({ type: TokenType.value, value: this.getString(), index: this.stream.idx });
 			} else if (char != " ") {
 				// Char is keyword?
 				let word = char;

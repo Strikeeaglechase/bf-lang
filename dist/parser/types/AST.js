@@ -14,4 +14,7 @@ export var NodeType;
     NodeType["value"] = "value";
     NodeType["expression"] = "expression";
     NodeType["assign"] = "assign";
+    NodeType["functionDef"] = "funcDef";
+    NodeType["functionRef"] = "funcRef";
+    NodeType["return"] = "return";
 })(NodeType || (NodeType = {}));

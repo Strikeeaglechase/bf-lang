@@ -1,4 +1,4 @@
-export type RawValue = string | number | boolean;
+export type RawValue = number;
 // export enum NodeType {
 // 	varDeclare,
 // 	varRefrence,
@@ -13,7 +13,10 @@ export enum NodeType {
 	prog = "prog",
 	value = "value",
 	expression = "expression",
-	assign = "assign"
+	assign = "assign",
+	functionDef = "funcDef",
+	functionRef = "funcRef",
+	return = "return"
 }
 interface AST {
 	type: NodeType;
@@ -23,14 +26,23 @@ export interface Value extends AST {
 	type: NodeType.value,
 	value: RawValue
 }
-export interface VarDeclare extends AST {
+interface VarDeclareBase extends AST {
 	type: NodeType.varDeclare,
 	name: string;
-	value: AnyAST;
 }
+interface SingleVarDeclare extends VarDeclareBase {
+	value: AnyAST;
+	varType: "single";
+}
+interface ArrayVarDeclare extends VarDeclareBase {
+	length: number;
+	varType: "array";
+}
+export type VarDeclare = SingleVarDeclare | ArrayVarDeclare;
 export interface VarRef extends AST {
 	type: NodeType.varRefrence,
 	name: string;
+	idx?: AnyAST;
 }
 export interface Prog extends AST {
 	type: NodeType.prog,
@@ -46,5 +58,21 @@ export interface Assign extends AST {
 	type: NodeType.assign,
 	varName: string;
 	value: AnyAST;
+	idx?: AnyAST;
 }
-export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign;
+export interface FunctionDef extends AST {
+	type: NodeType.functionDef;
+	name: string;
+	args: string[];
+	inside: AnyAST[];
+}
+export interface FunctionRef extends AST {
+	type: NodeType.functionRef;
+	name: string;
+	args: AnyAST[];
+}
+export interface Return extends AST {
+	type: NodeType.return;
+	value: AnyAST;
+}
+export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign | FunctionDef | FunctionRef | Return;

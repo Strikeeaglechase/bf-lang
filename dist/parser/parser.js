@@ -24,13 +24,16 @@ class Parser {
         };
     }
     parse() {
+        var _a;
         if (this.stream.end())
+            return;
+        if (((_a = this.stream.peak()) === null || _a === void 0 ? void 0 : _a.value) == ")")
             return;
         const token = this.stream.next();
         switch (token.type) {
             case TokenType.break: return null;
             case TokenType.keyword: return this.handleKeyword(token);
-            case TokenType.value: return { type: AST.NodeType.value, value: token.value };
+            case TokenType.value: return { type: AST.NodeType.value, value: parseInt(token.value.toString()) };
             case TokenType.name: return this.handleName(token);
             case TokenType.punctuation: return this.handlePunc(token);
         }
@@ -43,31 +46,116 @@ class Parser {
     }
     handleKeyword(token) {
         switch (token.value) {
-            case "let":
-                const name = this.stream.next().value;
-                this.stream.next(); // Step past equal
-                const value = this.parse();
-                return {
-                    type: AST.NodeType.varDeclare,
-                    name: name.toString(),
-                    value: this.expression(value)
-                };
+            case "let": return this.handleVarDef();
+            case "func": return this.handleFuncDef();
+            case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };
         }
         return;
     }
-    handleName(token) {
+    handleVarDef() {
+        const name = this.stream.next().value;
+        const nxt = this.stream.next(); // Get equal or bracket
+        if (nxt.value == "[") {
+            const len = parseInt(this.stream.next().value.toString());
+            return {
+                type: AST.NodeType.varDeclare,
+                varType: "array",
+                length: len,
+                name: name.toString()
+            };
+        }
+        else {
+            return {
+                type: AST.NodeType.varDeclare,
+                name: name.toString(),
+                value: this.expression(this.parse()),
+                varType: "single"
+            };
+        }
+    }
+    handleFuncDef() {
+        const name = this.stream.next().value.toString();
+        this.stream.next(); // Open parenth
+        const args = [];
+        while (this.stream.peak().value != ")") {
+            const nextArg = this.stream.next();
+            args.push(nextArg.value.toString());
+            const nxt = this.stream.next(); // Skip comma
+            if (nxt.value == ")")
+                break;
+        }
+        this.stream.next(); // Close parenth
+        this.stream.next(); // Open braket
+        const trees = [];
+        while (this.stream.peak().value != "}") {
+            trees.push(this.parse());
+        }
+        return {
+            type: AST.NodeType.functionDef,
+            name: name,
+            inside: trees.filter(node => node != null),
+            args: args
+        };
+    }
+    handleFuncRef(ref) {
+        this.stream.next();
+        const args = [];
+        while (this.stream.peak() && this.stream.peak().value != ")") {
+            const val = this.parse();
+            if (this.stream.peak().value == ")") {
+                args.push(val);
+                this.stream.next();
+                break;
+            }
+            else {
+                args.push(this.expression(val));
+            }
+            const nxt = this.stream.next(); // Comma 
+            if (nxt.value == ")" || nxt.type == TokenType.break)
+                break;
+        }
+        return {
+            type: AST.NodeType.functionRef,
+            name: ref.value.toString(),
+            args: args
+        };
+    }
+    handleArrRef(token) {
         var _a, _b;
-        const next = (_b = (_a = this.stream.peak()) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.toString();
-        if (next == "=") {
+        this.stream.next();
+        const idx = this.expression(this.parse());
+        this.stream.next();
+        const nxt = (_b = (_a = this.stream.peak()) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.toString();
+        if (nxt == "=") {
             this.stream.next();
             return {
                 type: AST.NodeType.assign,
                 varName: token.value.toString(),
+                idx: idx,
                 value: this.expression(this.parse())
             };
         }
-        else {
-            return { type: AST.NodeType.varRefrence, name: token.value.toString() };
+        return {
+            type: AST.NodeType.varRefrence,
+            name: token.value.toString(),
+            idx: idx
+        };
+    }
+    handleName(token) {
+        var _a, _b;
+        const next = (_b = (_a = this.stream.peak()) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.toString();
+        switch (next) {
+            case "=":
+                this.stream.next();
+                return {
+                    type: AST.NodeType.assign,
+                    varName: token.value.toString(),
+                    value: this.expression(this.parse()),
+                };
+            case "(": return this.handleFuncRef(token);
+            case "[": return this.handleArrRef(token);
+            default:
+                return { type: AST.NodeType.varRefrence, name: token.value.toString() };
         }
     }
     expression(left, leftPrec = 0) {

@@ -1,0 +1,1 @@
+export const meta = '{"vars":[],"arrs":[{"name":"a","idx":37,"len":15}],"parts":[{"name":"vars","start":0,"end":16,"color":"#2754e8"},{"name":"copy","start":16,"end":18,"color":"#069c24"},{"name":"stores","start":18,"end":21,"color":"#ff00f7"},{"name":"math","start":21,"end":37,"color":"#9ec70c"},{"name":"array","start":37,"end":null,"color":"#ffffff"}]}'
