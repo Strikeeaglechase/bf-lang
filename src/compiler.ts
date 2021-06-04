@@ -272,7 +272,25 @@ class Compiler {
 				break;
 			case "!=":
 				this.prepCmpExpr(A, B, base);
-				this.code += `[-<-[>>]<]<<[>>]>>[-<+>]<[<+>[-]]<`;
+				this.code += `[-<-[>>]<]<<[>>]>>[-<+>]<[<+>[-]]<`; // Compute !=
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
+			case "==":
+				this.prepCmpExpr(A, B, base);
+				this.code += `[-<-[>>]<]<<[>>]>>[-<+>]<[<+>[-]]>[-]<<[->+<]>[>]<+<<[>]>`; // Compute ==
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
+			case "&&":
+				this.prepCmpExpr(A, B, base);
+				this.code += "[[-]<<+>>]<[[-]<+>]<-[->+<]>[-<+>]<"; // Compute &&
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
+			case "||":
+				this.prepCmpExpr(A, B, base);
+				this.code += "[[-]<<+>>]<[[-]<+>]<[[-]>+<]>[-<+>]<"; // Compute ||
 				this.currentMemAddr = base + 2;
 				this.move(base + 2, resultLoc);
 				break;

@@ -48,9 +48,23 @@ class Parser {
         switch (token.value) {
             case "let": return this.handleVarDef();
             case "func": return this.handleFuncDef();
+            case "while": return this.handleWhileDef();
             case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };
         }
-        return;
+    }
+    handleWhileDef() {
+        this.stream.next(); // Skip '(';
+        const condition = this.expression(this.parse());
+        this.stream.next(); // Skip '{'
+        const trees = [];
+        while (this.stream.peak().value != "}") {
+            trees.push(this.parse());
+        }
+        return {
+            type: AST.NodeType.while,
+            condition: condition,
+            inside: trees.filter(node => node != null),
+        };
     }
     handleVarDef() {
         const name = this.stream.next().value;

@@ -20,7 +20,7 @@ interface Token {
 }
 const filterChars = ["\t"];
 const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
-const keywords = ["if", "let", "func", "ret"];
+const keywords = ["if", "let", "func", "ret", "while"];
 class Tokenizer {
 	stream: Stream<string>;
 	constructor(input: string) {

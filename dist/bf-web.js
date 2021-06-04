@@ -95,7 +95,7 @@ class Brainfuck {
         }
         const compilerLoc = meta.idxs.find(idx => idx.codeIndex == this.idx - 1);
         if (compilerLoc && compilerLoc.memAddr != this.ptr) {
-            console.log(`Code idx: ${this.idx} => C: ${compilerLoc.memAddr}, R: ${this.ptr}`);
+            // console.log(`Code idx: ${this.idx} => C: ${compilerLoc.memAddr}, R: ${this.ptr}`);
             // doExec = false;
         }
     }

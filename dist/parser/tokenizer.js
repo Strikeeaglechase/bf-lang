@@ -16,7 +16,7 @@ var TokenType;
 })(TokenType || (TokenType = {}));
 const filterChars = ["\t"];
 const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
-const keywords = ["if", "let", "func", "ret"];
+const keywords = ["if", "let", "func", "ret", "while"];
 class Tokenizer {
     constructor(input) {
         this.stream = new Stream(input.split("").filter(c => !filterChars.includes(c)));

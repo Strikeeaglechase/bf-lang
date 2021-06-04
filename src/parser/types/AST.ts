@@ -16,7 +16,8 @@ export enum NodeType {
 	assign = "assign",
 	functionDef = "funcDef",
 	functionRef = "funcRef",
-	return = "return"
+	return = "return",
+	while = "while"
 }
 interface AST {
 	type: NodeType;
@@ -75,4 +76,9 @@ export interface Return extends AST {
 	type: NodeType.return;
 	value: AnyAST;
 }
-export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign | FunctionDef | FunctionRef | Return;
+export interface While extends AST {
+	type: NodeType.while;
+	condition: AnyAST;
+	inside: AnyAST[];
+}
+export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign | FunctionDef | FunctionRef | Return | While;

@@ -17,4 +17,5 @@ export var NodeType;
     NodeType["functionDef"] = "funcDef";
     NodeType["functionRef"] = "funcRef";
     NodeType["return"] = "return";
+    NodeType["while"] = "while";
 })(NodeType || (NodeType = {}));
