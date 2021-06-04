@@ -5,10 +5,8 @@ import { Tokenizer } from "./parser/tokenizer.js"
 import { optimize } from "./bf.js";
 
 const code = `
-let a[15]
-a[8] = 15
+let a = 5 * (1!=2)
 `;
-// a[3] = a[1] + a[2]
 const toks = new Tokenizer(code).parse();
 const ast = new Parser(toks).startParse();
 fs.writeFileSync("../out.json", JSON.stringify(ast));

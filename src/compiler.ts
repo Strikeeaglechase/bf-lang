@@ -30,6 +30,7 @@ export interface ArrDef {
 export interface Meta {
 	vars: VarDef[];
 	arrs: ArrDef[];
+	idxs: { codeIndex: number, memAddr: number }[];
 	parts: { name: string, start: number, end: number, color: string }[];
 }
 // Array: [ref_result, pad, pad] [value_move, indexer, cell]
@@ -43,16 +44,25 @@ class Compiler {
 	varIdx: number = VAR_SPACE_START + VAR_SPACE_LEN - 1;
 	arrIdx: number = ARR_SEG_START;
 	mathIdx: number = MATH_SEG_START;
-	currentMemAddr: number = 0;
+	_currentMemAddr: number = 0;
 	stack: number[] = []; // Where function returns should put their value
 	code: string = "";
+	idxs: { codeIndex: number, memAddr: number }[] = [];
 	constructor(prog: AST.Prog) {
 		this.prog = prog;
+	}
+	set currentMemAddr(n: number) {
+		this._currentMemAddr = n;
+		this.idxs.push({ codeIndex: this.code.length, memAddr: n });
+	}
+	get currentMemAddr() {
+		return this._currentMemAddr;
 	}
 	exportMeta(): Meta {
 		return {
 			vars: this.vars,
 			arrs: this.arrs,
+			idxs: this.idxs,
 			parts: [
 				{
 					name: "vars",
@@ -198,9 +208,26 @@ class Compiler {
 			case AST.NodeType.functionRef: this.refrenceFunc(expr); break;
 		}
 	}
+	prepCmpExpr(A: number, B: number, base: number) {
+		this.goto(B + 1);
+		const toClearL = 6 - (B - base); // How many cells to clear
+		this.code += "[-]>".repeat(toClearL) + "<".repeat(toClearL);
+
+		this.goto(base); // Set flag
+		this.makeValue(1);
+
+		this.move(A, base + 3, false);
+		this.move(B, base + 4, false);
+		// Add 1 to A and B to ensure they are non-zero
+		this.goto(base + 3);
+		this.code += "+";
+		this.goto(base + 4);
+		this.code += "+";
+	}
 	handleExpression(expr: AST.Expression) {
 		this.makeValue(0);
 		const resultLoc = this.currentMemAddr;
+		const base = this.mathIdx;
 		const A = this.mathIdx + A_OFFSET;
 		const B = this.mathIdx + B_OFFSET;
 		this.mathIdx += MATH_SIZE;
@@ -230,6 +257,25 @@ class Compiler {
 				this.copy(B, resultLoc, false);
 				this.goto(A);
 				this.code += `-]`;
+				break;
+			case ">":
+				this.prepCmpExpr(A, B, base);
+				this.code += `[-<-[>>]<]<<[>>]>[<+>[-]]<`; // Compute >
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
+			case "<":
+				this.prepCmpExpr(A, B, base);
+				this.code += `[-<-[>>]<]<<[>>]>[<+>[-]]>[-]<<[->+<]>[>]<+<<[>]>`; // Compute <
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
+			case "!=":
+				this.prepCmpExpr(A, B, base);
+				this.code += `[-<-[>>]<]<<[>>]>>[-<+>]<[<+>[-]]<`;
+				this.currentMemAddr = base + 2;
+				this.move(base + 2, resultLoc);
+				break;
 		}
 		this.goto(resultLoc);
 		this.mathIdx -= MATH_SIZE;

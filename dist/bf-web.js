@@ -1,5 +1,4 @@
 import { optimize } from "./bf.js";
-// declare const meta: Meta;
 // @ts-ignore
 import { meta as metadata } from "./meta.js";
 const meta = JSON.parse(metadata);
@@ -30,13 +29,23 @@ class Brainfuck {
     execute(steps) {
         let curSteps = 0;
         while (this.idx < this.ops.length && curSteps++ < steps) {
-            const op = this.ops[this.idx++][0];
+            let op = "";
+            while (!ops.includes(op)) {
+                const base = this.ops[this.idx++];
+                if (!base)
+                    break;
+                op = base[0];
+            }
+            if (!op)
+                break;
             switch (op) {
                 case "+":
                     this.mem[this.ptr]++;
                     break;
                 case "-":
                     this.mem[this.ptr]--;
+                    if (this.mem[this.ptr] < 0)
+                        this.mem[this.ptr] = 0;
                     break;
                 case ">":
                     if (this.optimize) {
@@ -83,6 +92,11 @@ class Brainfuck {
                     console.log(str);
                     break;
             }
+        }
+        const compilerLoc = meta.idxs.find(idx => idx.codeIndex == this.idx - 1);
+        if (compilerLoc && compilerLoc.memAddr != this.ptr) {
+            console.log(`Code idx: ${this.idx} => C: ${compilerLoc.memAddr}, R: ${this.ptr}`);
+            // doExec = false;
         }
     }
     branchPast() {
