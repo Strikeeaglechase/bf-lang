@@ -4,9 +4,10 @@ import { Op, optimize } from "./bf.js";
 import { meta as metadata } from "./meta.js"
 const meta: Meta = JSON.parse(metadata);
 const X_SPACE = 25;
-const Y_SPACE = 50;
+const Y_SPACE = 20;
 const ops = "+-<>[].!".split("");
 let doExec = true;
+let numCalcs = 0;
 class Brainfuck {
 	ops: Op[];
 	mem: number[] = new Array(2 ** 16).fill(0);
@@ -27,57 +28,56 @@ class Brainfuck {
 		if (this.optimize) {
 			this.ops = optimize(this.ops.join("")) as Op[]; // Lie about type
 		}
+		numCalcs = 0;
 	}
-	execute(steps: number) {
-		let curSteps = 0;
-		while (this.idx < this.ops.length && curSteps++ < steps) {
-			let op = "";
-			while (!ops.includes(op)) {
-				const base = this.ops[this.idx++];
-				if (!base) break;
-				op = base[0];
-			}
-			if (!op) break;
-			switch (op) {
-				case "+": this.mem[this.ptr]++; break;
-				case "-": this.mem[this.ptr]--; if (this.mem[this.ptr] < 0) this.mem[this.ptr] = 0; break;
-				case ">":
-					if (this.optimize) {
-						const amt = parseInt(this.ops[this.idx - 1].substring(1));
-						this.ptr += amt;
-					} else {
-						this.ptr++;
-					}
-					break;
-				case "<":
-					if (this.optimize) {
-						const amt = parseInt(this.ops[this.idx - 1].substring(1));
-						this.ptr -= amt;
-					} else {
-						this.ptr--;
-					}
-					break;
-				case ".":
-					console.log(this.mem[this.ptr]);
-					// this.log += String.fromCharCode(this.mem[this.ptr]);
-					// if (this.mem[this.ptr] == 13) {
-					// 	console.log(this.log);
-					// 	this.log = "";
-					// }
-					break;
-				case "[": if (this.mem[this.ptr] == 0) this.branchPast(); break;
-				case "]": if (this.mem[this.ptr] != 0) this.branchBack(); return;
-				case "!":
-					doExec = false;
-					let str = "";
-					while (this.ops[this.idx] != "!") {
-						str += this.ops[this.idx];
-						this.idx++;
-					}
+	execute() {
+		let op = "";
+		while (!ops.includes(op)) {
+			const base = this.ops[this.idx++];
+			if (!base) break;
+			op = base[0];
+		}
+		if (!op) return;
+		numCalcs++;
+		switch (op) {
+			case "+": this.mem[this.ptr]++; break;
+			case "-": this.mem[this.ptr]--; if (this.mem[this.ptr] < 0) this.mem[this.ptr] = 0; break;
+			case ">":
+				if (this.optimize) {
+					const amt = parseInt(this.ops[this.idx - 1].substring(1));
+					this.ptr += amt;
+				} else {
+					this.ptr++;
+				}
+				break;
+			case "<":
+				if (this.optimize) {
+					const amt = parseInt(this.ops[this.idx - 1].substring(1));
+					this.ptr -= amt;
+				} else {
+					this.ptr--;
+				}
+				break;
+			case ".":
+				console.log(this.mem[this.ptr]);
+				// this.log += String.fromCharCode(this.mem[this.ptr]);
+				// if (this.mem[this.ptr] == 13) {
+				// 	console.log(this.log);
+				// 	this.log = "";
+				// }
+				break;
+			case "[": if (this.mem[this.ptr] == 0) this.branchPast(); break;
+			case "]": if (this.mem[this.ptr] != 0) this.branchBack(); return;
+			case "!":
+				doExec = false;
+				let str = "";
+				while (this.ops[this.idx] != "!") {
+					str += this.ops[this.idx];
 					this.idx++;
-					console.log(str);
-					break;
-			}
+				}
+				this.idx++;
+				console.log(str);
+				break;
 		}
 		const compilerLoc = meta.idxs.find(idx => idx.codeIndex == this.idx - 1);
 		if (compilerLoc && compilerLoc.memAddr != this.ptr) {
@@ -109,6 +109,48 @@ function findPart(idx: number) {
 	if (part) { return part }
 	return { color: "#ffffff" }
 }
+function drawMem(x: number, y: number): number {
+	let lines = 3;
+	let curArrs: ArrDef[] = [];
+	for (let i = 0; i < 256; i++) {
+		let xStep = X_SPACE;
+		if (bf.ptr == i) {
+			ctx.fillStyle = "#00ff00";
+		} else {
+			ctx.fillStyle = findPart(i).color;
+		}
+		ctx.fillText(bf.mem[i].toString(), x, y);
+
+		// Check if there are vars/arrs
+		meta.scopes.forEach((scope, idx) => {
+			const varDef = scope.vars.find(v => v.idx == i);
+			if (varDef) {
+				ctx.fillText(varDef.name, x, y + Y_SPACE * (idx + 1));
+				xStep = Math.max(xStep, ctx.measureText(varDef.name).width + 10);
+			}
+			const arrDef = scope.arrs.find(a => a.idx == i);
+			if (arrDef) {
+				curArrs[idx] = arrDef;
+				ctx.fillText(arrDef.name, x, y + Y_SPACE * (idx + 1))
+				xStep = Math.max(xStep, ctx.measureText(arrDef.name).width);
+			}
+			if (curArrs[idx] && i >= (curArrs[idx].idx + curArrs[idx].len * 3) + 3) curArrs[idx] = null;
+			if (curArrs[idx] && (i - curArrs[idx].idx - 5) % 3 == 0) {
+				const index = ((i - curArrs[idx].idx) - 5) / 3;
+				if (index >= 0) ctx.fillText(idx.toString(), x, y + 20);
+			}
+		});
+
+
+		x += xStep;
+		if (x > canvas.width - X_SPACE * 2) {
+			x = X_SPACE * 1.5;
+			y += Y_SPACE * (meta.scopes.length + 1) + 10;
+			if (--lines == 0) break;
+		}
+	}
+	return y;
+}
 function draw() {
 	// setTimeout(() => requestAnimationFrame(draw), 200);
 	requestAnimationFrame(draw);
@@ -121,36 +163,11 @@ function draw() {
 
 	let x = X_SPACE * 1.5;
 	let y = Y_SPACE * 1.5;
-	let lines = 3;
-	let curArr: ArrDef = null;
-	for (let i = 0; i < 256; i++) {
-		if (bf.ptr == i) {
-			ctx.fillStyle = "#00ff00";
-		} else {
-			ctx.fillStyle = findPart(i).color;
-		}
-		ctx.fillText(bf.mem[i].toString(), x, y);
-		const varDef = meta.vars.find(v => v.idx == i);
-		if (varDef) {
-			ctx.fillText(varDef.name, x, y + 20)
-		}
-		const arrDef = meta.arrs.find(a => a.idx == i);
-		if (arrDef) {
-			curArr = arrDef;
-			ctx.fillText(arrDef.name, x, y + 20)
-		}
-		if (curArr && i >= (curArr.idx + curArr.len * 3) + 3) curArr = null;
-		if (curArr && (i - curArr.idx - 5) % 3 == 0) {
-			const idx = ((i - curArr.idx) - 5) / 3;
-			if (idx >= 0) ctx.fillText(idx.toString(), x, y + 20);
-		}
-		x += X_SPACE;
-		if (x > canvas.width - X_SPACE * 2) {
-			x = X_SPACE * 1.5;
-			y += Y_SPACE;
-			if (--lines == 0) break;
-		}
-	}
+	y = drawMem(x, y);
+
+	y += Y_SPACE;
+	ctx.fillText(numCalcs.toString(), X_SPACE * 1.5, y);
+	if (doExec) for (let i = 0; i < 1000; i++) bf.execute();
 
 	x = X_SPACE * 1.5;
 	y += Y_SPACE * 5;
@@ -167,25 +184,12 @@ function draw() {
 			y += Y_SPACE;
 		}
 	}
-
-	if (doExec) bf.execute(1);
 }
 draw();
 console.log(meta);
 document.addEventListener("keydown", (e) => {
 	if (e.key == " ") {
-		bf.execute(1);
+		bf.execute();
 	}
 	if (e.key == "Enter") doExec = true;
 });
-/*
-bf.exec(`
-+>+
-[
-[->+>+<<] double the value
->>[-<<+>>] move back into place
-<<<[->>+<<] add last value
->>
-]
-`);
-*/

@@ -1,1 +1,60 @@
-{"type":"prog","inside":[{"type":"varDeclare","name":"x","value":{"type":"value","value":3},"varType":"single"},{"type":"varDeclare","name":"y","value":{"type":"value","value":5},"varType":"single"},{"type":"varDeclare","name":"z","value":{"type":"expression","op":"*","left":{"type":"varRefrence","name":"x"},"right":{"type":"varRefrence","name":"y"}},"varType":"single"}]}
+{
+	"type": "prog",
+	"inside": [{
+		"type": "varDeclare",
+		"name": "inA",
+		"value": {
+			"type": "value",
+			"value": 5
+		},
+		"valType": "num"
+	}, {
+		"type": "varDeclare",
+		"name": "inB",
+		"value": {
+			"type": "value",
+			"value": 6
+		},
+		"valType": "num"
+	}, {
+		"type": "funcDef",
+		"name": "add",
+		"inside": [{
+			"type": "return",
+			"value": {
+				"type": "expression",
+				"op": "+",
+				"left": {
+					"type": "varRefrence",
+					"name": "a"
+				},
+				"right": {
+					"type": "varRefrence",
+					"name": "b"
+				}
+			}
+		}],
+		"args": [{
+			"type": "num",
+			"name": "a"
+		}, {
+			"type": "num",
+			"name": "b"
+		}]
+	}, {
+		"type": "varDeclare",
+		"name": "c",
+		"value": {
+			"type": "funcRef",
+			"name": "add",
+			"args": [{
+				"type": "varRefrence",
+				"name": "inA"
+			}, {
+				"type": "varRefrence",
+				"name": "inB"
+			}]
+		},
+		"valType": "num"
+	}]
+}

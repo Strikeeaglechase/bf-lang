@@ -49,7 +49,10 @@ class Parser {
             case "let": return this.handleVarDef();
             case "func": return this.handleFuncDef();
             case "while": return this.handleWhileDef();
-            case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };
+            case "if": return this.handleIfDef();
+            case "ret":
+                return { type: AST.NodeType.return, value: this.expression(this.parse()) };
+                ;
         }
     }
     handleWhileDef() {
@@ -66,16 +69,31 @@ class Parser {
             inside: trees.filter(node => node != null),
         };
     }
+    handleIfDef() {
+        this.stream.next(); // Skip '(';
+        const condition = this.expression(this.parse());
+        this.stream.next(); // Skip '{'
+        const trees = [];
+        while (this.stream.peak().value != "}") {
+            trees.push(this.parse());
+        }
+        return {
+            type: AST.NodeType.if,
+            condition: condition,
+            inside: trees.filter(node => node != null),
+        };
+    }
     handleVarDef() {
+        const type = this.stream.next().value.toString();
         const name = this.stream.next().value;
         const nxt = this.stream.next(); // Get equal or bracket
         if (nxt.value == "[") {
             const len = parseInt(this.stream.next().value.toString());
             return {
                 type: AST.NodeType.varDeclare,
-                varType: "array",
+                valType: type,
                 length: len,
-                name: name.toString()
+                name: name.toString(),
             };
         }
         else {
@@ -83,7 +101,7 @@ class Parser {
                 type: AST.NodeType.varDeclare,
                 name: name.toString(),
                 value: this.expression(this.parse()),
-                varType: "single"
+                valType: type,
             };
         }
     }
@@ -92,8 +110,9 @@ class Parser {
         this.stream.next(); // Open parenth
         const args = [];
         while (this.stream.peak().value != ")") {
-            const nextArg = this.stream.next();
-            args.push(nextArg.value.toString());
+            const type = this.stream.next().value.toString();
+            const name = this.stream.next().value.toString();
+            args.push({ type: type, name: name });
             const nxt = this.stream.next(); // Skip comma
             if (nxt.value == ")")
                 break;

@@ -18,4 +18,7 @@ export var NodeType;
     NodeType["functionRef"] = "funcRef";
     NodeType["return"] = "return";
     NodeType["while"] = "while";
+    NodeType["if"] = "if";
+    NodeType["break"] = "break";
+    NodeType["typeDef"] = "typeDef";
 })(NodeType || (NodeType = {}));

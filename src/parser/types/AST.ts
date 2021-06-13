@@ -17,27 +17,36 @@ export enum NodeType {
 	functionDef = "funcDef",
 	functionRef = "funcRef",
 	return = "return",
-	while = "while"
+	while = "while",
+	if = "if",
+	break = "break",
+	typeDef = "typeDef"
 }
+// export enum VarType {
+// 	single,
+// 	singleArr,
+// 	obj,
+// 	objArr
+// }
+
 interface AST {
 	type: NodeType;
 }
-
 export interface Value extends AST {
 	type: NodeType.value,
 	value: RawValue
 }
 interface VarDeclareBase extends AST {
 	type: NodeType.varDeclare,
+	valType: string;
 	name: string;
+	// size: number;
 }
-interface SingleVarDeclare extends VarDeclareBase {
+export interface SingleVarDeclare extends VarDeclareBase {
 	value: AnyAST;
-	varType: "single";
 }
-interface ArrayVarDeclare extends VarDeclareBase {
+export interface ArrayVarDeclare extends VarDeclareBase {
 	length: number;
-	varType: "array";
 }
 export type VarDeclare = SingleVarDeclare | ArrayVarDeclare;
 export interface VarRef extends AST {
@@ -64,7 +73,7 @@ export interface Assign extends AST {
 export interface FunctionDef extends AST {
 	type: NodeType.functionDef;
 	name: string;
-	args: string[];
+	args: { type: string, name: string }[];
 	inside: AnyAST[];
 }
 export interface FunctionRef extends AST {
@@ -81,4 +90,14 @@ export interface While extends AST {
 	condition: AnyAST;
 	inside: AnyAST[];
 }
-export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign | FunctionDef | FunctionRef | Return | While;
+export interface If extends AST {
+	type: NodeType.if;
+	condition: AnyAST;
+	inside: AnyAST[];
+}
+export interface TypeDef extends AST {
+	type: NodeType.typeDef;
+	name: string;
+	fields: { name: string; type: string; }[];
+}
+export type AnyAST = VarDeclare | VarRef | Prog | Value | Expression | Assign | FunctionDef | FunctionRef | Return | While | If | TypeDef;

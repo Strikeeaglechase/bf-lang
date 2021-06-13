@@ -48,7 +48,8 @@ class Parser {
 			case "let": return this.handleVarDef();
 			case "func": return this.handleFuncDef();
 			case "while": return this.handleWhileDef();
-			case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };
+			case "if": return this.handleIfDef();
+			case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };;
 		}
 	}
 	handleWhileDef(): AST.While {
@@ -66,33 +67,50 @@ class Parser {
 			inside: trees.filter(node => node != null),
 		}
 	}
+	handleIfDef(): AST.If {
+		this.stream.next(); // Skip '(';
+		const condition = this.expression(this.parse());
+		this.stream.next(); // Skip '{'
+
+		const trees: AST.AnyAST[] = [];
+		while (this.stream.peak().value != "}") {
+			trees.push(this.parse());
+		}
+		return {
+			type: AST.NodeType.if,
+			condition: condition,
+			inside: trees.filter(node => node != null),
+		}
+	}
 	handleVarDef(): AST.VarDeclare {
+		const type = this.stream.next().value.toString();
 		const name = this.stream.next().value;
 		const nxt = this.stream.next(); // Get equal or bracket
 		if (nxt.value == "[") {
 			const len = parseInt(this.stream.next().value.toString());
 			return {
 				type: AST.NodeType.varDeclare,
-				varType: "array",
+				valType: type,
 				length: len,
-				name: name.toString()
+				name: name.toString(),
 			}
 		} else {
 			return {
 				type: AST.NodeType.varDeclare,
 				name: name.toString(),
 				value: this.expression(this.parse()),
-				varType: "single"
+				valType: type,
 			}
 		}
 	}
 	handleFuncDef(): AST.FunctionDef {
 		const name = this.stream.next().value.toString();
 		this.stream.next(); // Open parenth
-		const args: string[] = [];
+		const args: { type: string, name: string }[] = [];
 		while (this.stream.peak().value != ")") {
-			const nextArg = this.stream.next();
-			args.push(nextArg.value.toString());
+			const type = this.stream.next().value.toString();
+			const name = this.stream.next().value.toString();
+			args.push({ type: type, name: name });
 			const nxt = this.stream.next(); // Skip comma
 			if (nxt.value == ")") break;
 		}
@@ -102,6 +120,7 @@ class Parser {
 		while (this.stream.peak().value != "}") {
 			trees.push(this.parse());
 		}
+
 		return {
 			type: AST.NodeType.functionDef,
 			name: name,

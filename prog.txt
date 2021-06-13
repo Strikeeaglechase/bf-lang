@@ -1,0 +1,6 @@
+let num inA = 5
+let num inB = 6
+func add(num a, num b) {
+	ret a+b
+}
+let num c = add(inA, inB)

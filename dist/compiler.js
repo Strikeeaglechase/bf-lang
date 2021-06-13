@@ -14,21 +14,62 @@ const B_OFFSET = 2;
 const ARR_SEG_START = MATH_SEG_START + MATH_SEG_LEN;
 const ARR_UNIT_SIZE = 3;
 const ARR_PADDING = 3;
+class Scope {
+    constructor(global, parent, varIdx, arrIdx) {
+        this.vars = [];
+        this.arrs = [];
+        this.global = global;
+        this.varIdx = parent ? parent.varIdx : varIdx;
+        this.arrIdx = parent ? parent.arrIdx : arrIdx;
+    }
+    defVar(def) {
+        const newVarDef = {
+            name: def.name,
+            idx: this.varIdx--
+        };
+        this.vars.push(newVarDef);
+        return newVarDef;
+    }
+    defArr(def) {
+        const newArrDef = {
+            name: def.name,
+            idx: this.arrIdx,
+            len: def.length
+        };
+        this.arrs.push(newArrDef);
+        this.arrIdx += def.length * ARR_UNIT_SIZE + ARR_PADDING;
+        return newArrDef;
+    }
+    getVar(varName) {
+        const local = this.vars.find(v => v.name == varName);
+        if (local)
+            return local;
+        if (this.global)
+            return this.global.vars.find(v => v.name == varName);
+        throw `Undefined variable "${varName}"`;
+    }
+    getArr(arrName) {
+        const local = this.arrs.find(v => v.name == arrName);
+        if (local)
+            return local;
+        if (this.global)
+            return this.global.arrs.find(v => v.name == arrName);
+        throw `Undefined array "${arrName}"`;
+    }
+}
 // Array: [ref_result, pad, pad] [value_move, indexer, cell]
 //        header                 data
 class Compiler {
     constructor(prog) {
-        this.vars = [];
-        this.arrs = [];
-        this.funcs = [];
-        // We start at the end of the var space as its more efficent
-        this.varIdx = VAR_SPACE_START + VAR_SPACE_LEN - 1;
-        this.arrIdx = ARR_SEG_START;
+        this.globalScope = new Scope(null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
+        this.scopes = [this.globalScope];
         this.mathIdx = MATH_SEG_START;
-        this._currentMemAddr = 0;
+        this.funcs = [];
         this.stack = []; // Where function returns should put their value
-        this.code = "";
-        this.idxs = [];
+        this.idxs = []; // Debug info for bf executor
+        this.allScopes = [this.globalScope];
+        this._currentMemAddr = 0;
+        this.code = ""; // Result
         this.prog = prog;
     }
     set currentMemAddr(n) {
@@ -38,10 +79,12 @@ class Compiler {
     get currentMemAddr() {
         return this._currentMemAddr;
     }
+    get scope() {
+        return this.scopes[this.scopes.length - 1];
+    }
     exportMeta() {
         return {
-            vars: this.vars,
-            arrs: this.arrs,
+            scopes: this.allScopes,
             idxs: this.idxs,
             parts: [
                 {
@@ -102,7 +145,32 @@ class Compiler {
             case AST.NodeType.return:
                 this.return(tree);
                 break;
+            case AST.NodeType.while:
+                this.handleWhile(tree);
+                break;
+            case AST.NodeType.if:
+                this.handleIf(tree);
+                break;
         }
+    }
+    handleWhile(whileDef) {
+        this.goto(MATH_TEMP_STORE);
+        this.calcValue(whileDef.condition);
+        this.code += `[`;
+        for (let i = 0; i < whileDef.inside.length; i++)
+            this.compileNode(whileDef.inside[i]);
+        this.goto(MATH_TEMP_STORE);
+        this.calcValue(whileDef.condition);
+        this.code += `]`;
+    }
+    handleIf(ifDef) {
+        this.goto(MATH_TEMP_STORE);
+        this.calcValue(ifDef.condition);
+        this.code += `[`;
+        for (let i = 0; i < ifDef.inside.length; i++)
+            this.compileNode(ifDef.inside[i]);
+        this.goto(MATH_TEMP_STORE);
+        this.code += `[-]]`;
     }
     return(ret) {
         this.goto(MATH_TEMP_STORE);
@@ -111,24 +179,26 @@ class Compiler {
     }
     defineFunc(funcDef) {
         this.funcs.push(funcDef);
-        funcDef.args.forEach(arg => {
-            if (!this.vars.find(v => v.name == arg)) {
-                // Create new var
-                const newVarDef = {
-                    name: arg,
-                    idx: this.varIdx--
-                };
-                this.vars.push(newVarDef);
-            }
-        });
     }
     refrenceFunc(ref) {
+        const def = this.funcs.find(f => f.name == ref.name);
         // Push onto call stack
         this.stack.push(this.currentMemAddr);
-        const def = this.funcs.find(f => f.name == ref.name);
+        // Create scope and push onto scope arr
+        const scope = new Scope(this.globalScope, this.scope);
+        this.scopes.push(scope);
+        this.allScopes.push(scope);
+        def.args.forEach(arg => {
+            scope.defVar({
+                type: AST.NodeType.varDeclare,
+                value: { type: AST.NodeType.value, value: 0 },
+                name: arg,
+                varType: "single"
+            });
+        });
         // Setup args
         def.args.forEach((arg, idx) => {
-            const varDef = this.vars.find(v => v.name == arg);
+            const varDef = this.scope.getVar(arg);
             this.goto(MATH_TEMP_STORE);
             this.calcValue(ref.args[idx]);
             this.move(MATH_TEMP_STORE, varDef.idx);
@@ -140,34 +210,26 @@ class Compiler {
             if (tree.type == AST.NodeType.return)
                 break;
         }
+        // Pop off stack elements
+        this.scopes.pop();
         this.stack.pop();
     }
     createVar(newVar) {
         if (newVar.varType == "single") {
-            const newVarDef = {
-                name: newVar.name,
-                idx: this.varIdx--
-            };
-            this.vars.push(newVarDef);
+            const newVarDef = this.scope.defVar(newVar);
             // Need to assign default var value
             this.goto(MATH_TEMP_STORE);
             this.calcValue(newVar.value);
             this.move(MATH_TEMP_STORE, newVarDef.idx);
         }
         else {
-            const newArrDef = {
-                name: newVar.name,
-                idx: this.arrIdx,
-                len: newVar.length
-            };
-            this.arrIdx += newVar.length * ARR_UNIT_SIZE + ARR_PADDING;
-            this.arrs.push(newArrDef);
+            this.scope.defArr(newVar);
         }
     }
     setVar(assignment) {
         if (assignment.idx) {
             // If there is an idx then is an array
-            const arrDef = this.arrs.find(a => a.name == assignment.varName);
+            const arrDef = this.scope.getArr(assignment.varName);
             // @ts-ignore
             // this.debug(`${assignment.varName}[${assignment.idx.value}]=${assignment.value.value}`);
             // Compute and store index
@@ -182,7 +244,7 @@ class Compiler {
             this.setArrayValue(arrDef.idx);
         }
         else {
-            const varDef = this.vars.find(v => v.name == assignment.varName);
+            const varDef = this.scope.getVar(assignment.varName);
             this.goto(MATH_TEMP_STORE);
             this.calcValue(assignment.value);
             this.move(MATH_TEMP_STORE, varDef.idx);
@@ -258,7 +320,7 @@ class Compiler {
                 break;
             case "<":
                 this.prepCmpExpr(A, B, base);
-                this.code += `[-<-[>>]<]<<[>>]>[<+>[-]]>[-]<<[->+<]>[>]<+<<[>]>`; // Compute <
+                this.code += `[-<-[>>]<]<<[>>]>>[<<+>>[-]]<<`; // Compute <
                 this.currentMemAddr = base + 2;
                 this.move(base + 2, resultLoc);
                 break;
@@ -292,12 +354,12 @@ class Compiler {
     }
     getVarVal(ref) {
         if (!ref.idx) {
-            const locDef = this.vars.find(v => v.name == ref.name);
+            const locDef = this.scope.getVar(ref.name);
             this.copy(locDef.idx, this.currentMemAddr);
         }
         else {
             // We have an idx, must be array
-            const arrDef = this.arrs.find(a => a.name == ref.name);
+            const arrDef = this.scope.getArr(ref.name);
             const target = this.currentMemAddr;
             // Set IDX
             this.goto(MATH_TEMP_STORE);

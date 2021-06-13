@@ -18,9 +18,9 @@ interface Token {
 	value: string | number;
 	index: number;
 }
-const filterChars = ["\t"];
+const filterChars = ["\t", "\r"];
 const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
-const keywords = ["if", "let", "func", "ret", "while"];
+const keywords = ["if", "let", "func", "ret", "while", "break", "type"];
 class Tokenizer {
 	stream: Stream<string>;
 	constructor(input: string) {
