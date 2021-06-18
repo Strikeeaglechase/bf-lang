@@ -40,18 +40,22 @@ interface VarDeclareBase extends AST {
 	type: NodeType.varDeclare,
 	valType: string;
 	name: string;
+	isArray: boolean;
 	// size: number;
 }
 export interface SingleVarDeclare extends VarDeclareBase {
 	value: AnyAST;
+	isArray: false;
 }
 export interface ArrayVarDeclare extends VarDeclareBase {
 	length: number;
+	isArray: true;
 }
 export type VarDeclare = SingleVarDeclare | ArrayVarDeclare;
 export interface VarRef extends AST {
 	type: NodeType.varRefrence,
 	name: string;
+	path: string[];
 	idx?: AnyAST;
 }
 export interface Prog extends AST {
@@ -69,11 +73,12 @@ export interface Assign extends AST {
 	varName: string;
 	value: AnyAST;
 	idx?: AnyAST;
+	path: string[]
 }
 export interface FunctionDef extends AST {
 	type: NodeType.functionDef;
 	name: string;
-	args: { type: string, name: string }[];
+	args: VarDeclare[];
 	inside: AnyAST[];
 }
 export interface FunctionRef extends AST {

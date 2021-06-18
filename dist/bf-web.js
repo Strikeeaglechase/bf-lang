@@ -140,30 +140,29 @@ function drawMem(x, y) {
         }
         ctx.fillText(bf.mem[i].toString(), x, y);
         // Check if there are vars/arrs
-        meta.scopes.forEach((scope, idx) => {
-            const varDef = scope.vars.find(v => v.idx == i);
+        meta.frames.forEach((frame, idx) => {
+            const varDef = frame.scope.vars.find(v => v.idx == i);
             if (varDef) {
                 ctx.fillText(varDef.name, x, y + Y_SPACE * (idx + 1));
                 xStep = Math.max(xStep, ctx.measureText(varDef.name).width + 10);
             }
-            const arrDef = scope.arrs.find(a => a.idx == i);
-            if (arrDef) {
-                curArrs[idx] = arrDef;
-                ctx.fillText(arrDef.name, x, y + Y_SPACE * (idx + 1));
-                xStep = Math.max(xStep, ctx.measureText(arrDef.name).width);
+            if (varDef && varDef.isArray) {
+                curArrs[idx] = varDef;
+                ctx.fillText(varDef.name, x, y + Y_SPACE * (idx + 1));
+                xStep = Math.max(xStep, ctx.measureText(varDef.name).width);
             }
-            if (curArrs[idx] && i >= (curArrs[idx].idx + curArrs[idx].len * 3) + 3)
+            if (curArrs[idx] && i >= (curArrs[idx].idx + curArrs[idx].length * (curArrs[idx].type.size + 2)) + 3)
                 curArrs[idx] = null;
-            if (curArrs[idx] && (i - curArrs[idx].idx - 5) % 3 == 0) {
-                const index = ((i - curArrs[idx].idx) - 5) / 3;
+            if (curArrs[idx] && (i - curArrs[idx].idx - 5) % (curArrs[idx].type.size + 2) == 0) {
+                const index = ((i - curArrs[idx].idx) - 5) / (curArrs[idx].type.size + 2);
                 if (index >= 0)
-                    ctx.fillText(idx.toString(), x, y + 20);
+                    ctx.fillText(index.toString(), x, y + 20);
             }
         });
         x += xStep;
         if (x > canvas.width - X_SPACE * 2) {
             x = X_SPACE * 1.5;
-            y += Y_SPACE * (meta.scopes.length + 1) + 10;
+            y += Y_SPACE * (meta.frames.length + 1) + 10;
             if (--lines == 0)
                 break;
         }
@@ -177,14 +176,14 @@ function draw() {
     canvas.height = window.innerHeight;
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = "16px sans-serif";
+    ctx.font = "24px sans-serif";
     let x = X_SPACE * 1.5;
     let y = Y_SPACE * 1.5;
     y = drawMem(x, y);
     y += Y_SPACE;
     ctx.fillText(numCalcs.toString(), X_SPACE * 1.5, y);
     if (doExec)
-        for (let i = 0; i < 1000; i++)
+        for (let i = 0; i < 1; i++)
             bf.execute();
     x = X_SPACE * 1.5;
     y += Y_SPACE * 5;
@@ -204,6 +203,7 @@ function draw() {
     }
 }
 draw();
+bf.exec(`>>>>>>>>>>>>>>>>>>>>[-]+++++<<<<<<[-]>>>>>>[-<<<<<<+>>>>>>][-]+++++++<<<<<<<[-]>>>>>>>[-<<<<<<<+>>>>>>>][-]>><<<<<<<<[->>+>+<<<][-]>>[-<<+>>]>>>>>>[-]<<<<<[->>>>>+<<<<<]>>>>>><<<<<<<<<<[->>>+>+<<<<][-]>>>[-<<<+>>>]>>>>>>>[-]<<<<<<[->>>>>>+<<<<<<]>>>[-]>>[-<<+>>]>[-<<<+>>>]<<<<<<<<<<<[-]>>>>>>>>[-<<<<<<<<+>>>>>>>>]`);
 console.log(meta);
 document.addEventListener("keydown", (e) => {
     if (e.key == " ") {

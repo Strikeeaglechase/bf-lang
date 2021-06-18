@@ -15,7 +15,7 @@ var TokenType;
     TokenType["break"] = "break";
 })(TokenType || (TokenType = {}));
 const filterChars = ["\t", "\r"];
-const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]"];
+const puncToks = ["<", ">", "=", "==", "!=", "<=", "=>", "(", ")", "{", "}", "&&", "||", "+", "-", "*", ",", "[", "]", "."];
 const keywords = ["if", "let", "func", "ret", "while", "break", "type"];
 class Tokenizer {
     constructor(input) {
@@ -39,7 +39,10 @@ class Tokenizer {
             else if (char != " ") {
                 // Char is keyword?
                 let word = char;
-                while (!puncToks.some(pt => pt[0] == this.stream.peak()) && this.stream.peak() != " " && this.stream.peak() != "\n") {
+                while (!puncToks.some(pt => pt[0] == this.stream.peak()) &&
+                    this.stream.peak() != " " &&
+                    this.stream.peak() != "\n" &&
+                    !this.stream.end()) {
                     word += this.stream.next();
                 }
                 if (keywords.some(kw => kw == word)) {

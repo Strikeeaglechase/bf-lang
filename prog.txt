@@ -1,6 +1,6 @@
-let num inA = 5
-let num inB = 6
-func add(num a, num b) {
-	ret a+b
-}
-let num c = add(inA, inB)
+let num arr[10]
+let num idx = 0
+while(idx < 10){
+	arr[idx] = idx
+	idx = idx + 1
+} 

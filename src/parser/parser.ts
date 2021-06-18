@@ -49,8 +49,26 @@ class Parser {
 			case "func": return this.handleFuncDef();
 			case "while": return this.handleWhileDef();
 			case "if": return this.handleIfDef();
+			case "type": return this.handleTypeDef();
 			case "ret": return { type: AST.NodeType.return, value: this.expression(this.parse()) };;
 		}
+	}
+	handleTypeDef(): AST.TypeDef {
+		const name = this.stream.next();
+		this.stream.next(); // Skip {
+		this.stream.next(); // Skip break
+		const fields: { name: string, type: string }[] = []
+		while (this.stream.peak().value != "}") {
+			const type = this.stream.next().value.toString();
+			const name = this.stream.next().value.toString();
+			this.stream.next(); // Pass break
+			fields.push({ type, name });
+		}
+		return {
+			type: AST.NodeType.typeDef,
+			name: name.value.toString(),
+			fields: fields
+		};
 	}
 	handleWhileDef(): AST.While {
 		this.stream.next(); // Skip '(';
@@ -93,6 +111,7 @@ class Parser {
 				valType: type,
 				length: len,
 				name: name.toString(),
+				isArray: true
 			}
 		} else {
 			return {
@@ -100,17 +119,38 @@ class Parser {
 				name: name.toString(),
 				value: this.expression(this.parse()),
 				valType: type,
+				isArray: false
 			}
 		}
 	}
 	handleFuncDef(): AST.FunctionDef {
 		const name = this.stream.next().value.toString();
 		this.stream.next(); // Open parenth
-		const args: { type: string, name: string }[] = [];
+		const args: AST.VarDeclare[] = [];
 		while (this.stream.peak().value != ")") {
 			const type = this.stream.next().value.toString();
 			const name = this.stream.next().value.toString();
-			args.push({ type: type, name: name });
+			const isArray = this.stream.peak().value.toString() == "[";
+			if (isArray) {
+				this.stream.next(); // Opening [
+				const len = parseInt(this.stream.next().value.toString());
+				this.stream.next(); // Closing ]
+				args.push({
+					type: AST.NodeType.varDeclare,
+					name: name,
+					valType: type,
+					isArray: true,
+					length: len
+				});
+			} else {
+				args.push({
+					type: AST.NodeType.varDeclare,
+					name: name,
+					valType: type,
+					isArray: false,
+					value: { type: AST.NodeType.value, value: 0 }
+				});
+			}
 			const nxt = this.stream.next(); // Skip comma
 			if (nxt.value == ")") break;
 		}
@@ -153,6 +193,13 @@ class Parser {
 		this.stream.next();
 		const idx = this.expression(this.parse());
 		this.stream.next();
+
+		let path: string[] = [];
+		while (this.stream.peak()?.value == ".") {
+			this.stream.next(); // Skip .
+			path.push(this.stream.next().value.toString());
+		}
+		if (path.length == 0) path = ["_prime"];
 		const nxt = this.stream.peak()?.value?.toString();
 		if (nxt == "=") {
 			this.stream.next();
@@ -160,16 +207,26 @@ class Parser {
 				type: AST.NodeType.assign,
 				varName: token.value.toString(),
 				idx: idx,
-				value: this.expression(this.parse())
+				value: this.expression(this.parse()),
+				path: path
 			}
 		}
 		return {
 			type: AST.NodeType.varRefrence,
 			name: token.value.toString(),
-			idx: idx
+			idx: idx,
+			path: path
 		}
 	}
 	handleName(token: Token): AST.AnyAST {
+		// Path only applicable to vars, but if it exists we need to grab it
+		let path: string[] = [];
+		while (this.stream.peak()?.value == ".") {
+			this.stream.next(); // Skip .
+			path.push(this.stream.next().value.toString());
+		}
+		if (path.length == 0) path = ["_prime"];
+
 		const next = this.stream.peak()?.value?.toString();
 		switch (next) {
 			case "=":
@@ -178,11 +235,12 @@ class Parser {
 					type: AST.NodeType.assign,
 					varName: token.value.toString(),
 					value: this.expression(this.parse()),
+					path: path
 				}
 			case "(": return this.handleFuncRef(token);
 			case "[": return this.handleArrRef(token);
 			default:
-				return { type: AST.NodeType.varRefrence, name: token.value.toString() };
+				return { type: AST.NodeType.varRefrence, name: token.value.toString(), path: path };
 		}
 	}
 	expression(left: AST.AnyAST, leftPrec: number = 0): AST.AnyAST {
