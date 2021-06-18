@@ -158,7 +158,7 @@ function draw() {
 
 	ctx.fillStyle = "#000000";
 	ctx.fillRect(0, 0, canvas.width, canvas.height);
-	ctx.font = "24px sans-serif"
+	ctx.font = "16px sans-serif"
 
 	let x = X_SPACE * 1.5;
 	let y = Y_SPACE * 1.5;
@@ -166,7 +166,7 @@ function draw() {
 
 	y += Y_SPACE;
 	ctx.fillText(numCalcs.toString(), X_SPACE * 1.5, y);
-	if (doExec) for (let i = 0; i < 1; i++) bf.execute();
+	if (doExec) for (let i = 0; i < 100; i++) bf.execute();
 
 	x = X_SPACE * 1.5;
 	y += Y_SPACE * 5;
@@ -185,7 +185,6 @@ function draw() {
 	}
 }
 draw();
-bf.exec(`>>>>>>>>>>>>>>>>>>>>[-]+++++<<<<<<[-]>>>>>>[-<<<<<<+>>>>>>][-]+++++++<<<<<<<[-]>>>>>>>[-<<<<<<<+>>>>>>>][-]>><<<<<<<<[->>+>+<<<][-]>>[-<<+>>]>>>>>>[-]<<<<<[->>>>>+<<<<<]>>>>>><<<<<<<<<<[->>>+>+<<<<][-]>>>[-<<<+>>>]>>>>>>>[-]<<<<<<[->>>>>>+<<<<<<]>>>[-]>>[-<<+>>]>[-<<<+>>>]<<<<<<<<<<<[-]>>>>>>>>[-<<<<<<<<+>>>>>>>>]`);
 console.log(meta);
 document.addEventListener("keydown", (e) => {
 	if (e.key == " ") {

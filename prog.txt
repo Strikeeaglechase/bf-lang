@@ -1,6 +1,10 @@
-let num arr[10]
-let num idx = 0
-while(idx < 10){
-	arr[idx] = idx
-	idx = idx + 1
-} 
+type Point {
+	num x
+	num y
+}
+let Point pt = 0
+let Point pt2 = 0
+
+pt.x = 5
+pt.y = 7
+let num test = pt + pt2
