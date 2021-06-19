@@ -80,7 +80,7 @@ class Frame {
 const numType = {
     name: "num",
     size: 1,
-    keys: new Map([["_prime", { index: 0, type: "_" }]])
+    keys: new Map([["_prime", { index: 0, type: null }]])
 };
 function isArr(maybeArr) {
     return maybeArr.isArray;
@@ -211,11 +211,11 @@ class Compiler {
         let totalSize = 1;
         const keys = new Map();
         def.fields.forEach(field => {
-            keys.set(field.name, { type: field.type, index: totalSize });
             const type = this.types.get(field.type);
+            keys.set(field.name, { type: type, index: totalSize });
             totalSize += type.size;
         });
-        keys.set("_prime", { type: "_", index: 0 });
+        keys.set("_prime", { type: null, index: 0 });
         this.types.set(def.name, {
             name: def.name,
             keys: keys,
@@ -304,7 +304,7 @@ class Compiler {
             this.calcValue(assignment.value);
             // Move index into active indexing cell
             this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
-            this.setArrayValue(varDef.idx, offset);
+            this.setArrayValue(varDef.idx, varDef.type.size, offset);
         }
         else {
             this.goto(MATH_TEMP_STORE);
@@ -419,7 +419,7 @@ class Compiler {
         let curType = type;
         path.forEach(item => {
             offset += curType.keys.get(item).index;
-            curType = this.types.get(curType.keys.get(item).type);
+            curType = curType.keys.get(item).type;
         });
         return offset;
     }
@@ -436,40 +436,45 @@ class Compiler {
             this.goto(MATH_TEMP_STORE);
             this.calcValue(ref.idx);
             this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
-            this.fetchFromArray(varDef.idx, target, offset);
+            this.fetchFromArray(varDef.idx, varDef.type.size, offset, target);
         }
     }
     // Assumes that IDX_TEMP_STORE has the array index offset
-    fetchFromArray(arrIdx, dst, objOffset) {
+    fetchFromArray(arrIdx, arrUnitSize, objOffset, dst) {
         const offR = '>'.repeat(objOffset);
         const offL = '<'.repeat(objOffset);
+        const szR = '>'.repeat(arrUnitSize);
+        const szL = '<'.repeat(arrUnitSize);
         this.move(IDX_TEMP_STORE, arrIdx + 4);
         this.goto(arrIdx + 4);
         this.code += `[-<<+<+>>>]`; // Copy idx
         this.code += `<<<[->>>+<<<]>>>`; // Put idx in pad and idxer
-        this.code += `[[->>>+<<<]+>>>-]+`; // go to idx
-        this.code += `>${offR}[-<<${offL}+${offR}>>]${offR}<`; // move value into hold
-        this.code += `[-<[-<<<+>>>]<<]`; // shift back to start
-        this.code += `>[->>+<<]`; // Move idx copy into idxer
-        this.code += `<<[->+>+<<]`; // Copy value
-        this.code += `>>[->+<]`; // Move value into val_cell
+        this.code += `[->>${szR}+${szL}<<]${szR}>>-`; // First index out step
+        this.code += `[[->>${szR}+${szL}<<]+${szR}>>-]+`; // Remaining index out steps
+        this.code += `>${offR}[-<<${offL}+${offR}>>]${offL}<`; // move value into hold
+        this.code += `[-<[-<<${szL}+${szR}>>]<${szL}]`; // shift back to start
+        this.code += `<<[->>+<<]`; // Move idx copy into idxer
+        this.code += `>[-<+<+>>]`; // Copy value
+        this.code += `<[->+<]`; // Move value into val_cell
         this.code += `<[-<+>]`; // Shift other value into result
-        this.code += `>>>[[->>>+<<<]<[->>>+<<<]>+>>>-]`; // Write out value
+        this.code += `>>>[[->>${szR}+${szL}<<]<[->>${szR}+${szL}<<]>+${szR}>>-]`; // Write out value
         this.code += `<[->>${offR}+${offL}<<]`; // Shift value into place
-        this.code += `<<[-<<<]<`; // Move back to start
+        this.code += `<${szL}[-${szL}<<]${szR}<<`; // Move back to start
         this.currentMemAddr = arrIdx; // After all those ops this is where we end up
         this.move(arrIdx, dst); // Move result to out
     }
     // Assumes IDX_TEMP_STORE and MATH_TEMP_STORE are set
-    setArrayValue(arrIdx, objOffset) {
+    setArrayValue(arrIdx, arrUnitSize, objOffset) {
         const offR = '>'.repeat(objOffset);
         const offL = '<'.repeat(objOffset);
+        const szR = '>'.repeat(arrUnitSize);
+        const szL = '<'.repeat(arrUnitSize);
         this.move(MATH_TEMP_STORE, arrIdx + 3);
         this.move(IDX_TEMP_STORE, arrIdx + 4);
         this.goto(arrIdx + 4);
-        this.code += `[[->>>+<<<]<[->>>+<<<]>+>>>-]`; // Move to dst
-        this.code += `>[-]<<[->>${offR}+${offL}<<]`; // Zero and store
-        this.code += `<<[-<<<]<`; // Return to start
+        this.code += `[[->>${szR}+${szL}<<]<[->>${szR}+${szL}<<]>+${szR}>>-]`; // Move to dst
+        this.code += `>${offR}[-]${offL}<<[->>${offR}+${offL}<<]`; // Zero and store
+        this.code += `<${szL}[-${szL}<<]${szR}<<`; // Return to start
         this.currentMemAddr = arrIdx;
     }
     copy(src, dst, blank = true) {

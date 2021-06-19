@@ -26,7 +26,11 @@ class Tokenizer {
         while (!this.stream.end()) {
             const char = this.stream.next();
             const punctuation = this.getPunc();
-            if (punctuation) {
+            if (char == "/" && this.stream.peak() == "/") {
+                while (!this.stream.end() && this.stream.next() != "\n")
+                    ;
+            }
+            else if (punctuation) {
                 tokens.push({ type: TokenType.punctuation, value: punctuation, index: this.stream.idx });
             }
             else if (char == "\n") {

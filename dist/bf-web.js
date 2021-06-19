@@ -7,6 +7,7 @@ const Y_SPACE = 20;
 const ops = "+-<>[].!".split("");
 let doExec = true;
 let numCalcs = 0;
+const MAX = Math.pow(2, 16);
 class Brainfuck {
     constructor(src) {
         this.mem = new Array(Math.pow(2, 16)).fill(0);
@@ -42,11 +43,13 @@ class Brainfuck {
         switch (op) {
             case "+":
                 this.mem[this.ptr]++;
+                if (this.mem[this.ptr] > MAX)
+                    this.mem[this.ptr] = 0;
                 break;
             case "-":
                 this.mem[this.ptr]--;
                 if (this.mem[this.ptr] < 0)
-                    this.mem[this.ptr] = 0;
+                    this.mem[this.ptr] = MAX;
                 break;
             case ">":
                 if (this.optimize) {
@@ -127,6 +130,28 @@ function findPart(idx) {
     }
     return { color: "#ffffff" };
 }
+function flatType(type) {
+    console.log(type);
+    let curOffset = 0;
+    let types = [];
+    function recurse(parentName, typ) {
+        Object.keys(typ.keys).forEach(name => {
+            console.log(`Handleing key ${name}`);
+            if (typ.keys[name].type) {
+                console.log(`Key has type, recursing with offset ${typ.keys[name].index}`);
+                curOffset = curOffset + typ.keys[name].index;
+                recurse(name, typ.keys[name].type);
+            }
+            else {
+                console.log(`Key has no subtype, setting for parent "${parentName}" ${curOffset}+${typ.keys[name].index}`);
+                types[curOffset + typ.keys[name].index] = name == "_prime" ? parentName : name;
+            }
+        });
+    }
+    recurse("", type);
+    console.log(types);
+    return;
+}
 function drawMem(x, y) {
     let lines = 3;
     let curArrs = [];
@@ -153,10 +178,11 @@ function drawMem(x, y) {
             }
             if (curArrs[idx] && i >= (curArrs[idx].idx + curArrs[idx].length * (curArrs[idx].type.size + 2)) + 3)
                 curArrs[idx] = null;
-            if (curArrs[idx] && (i - curArrs[idx].idx - 5) % (curArrs[idx].type.size + 2) == 0) {
+            if (curArrs[idx]) {
                 const index = ((i - curArrs[idx].idx) - 5) / (curArrs[idx].type.size + 2);
-                if (index >= 0)
+                if (index >= 0 && (i - curArrs[idx].idx - 5) % (curArrs[idx].type.size + 2) == 0)
                     ctx.fillText(index.toString(), x, y + 20);
+                flatType(curArrs[idx].type);
             }
         });
         x += xStep;
@@ -171,7 +197,7 @@ function drawMem(x, y) {
 }
 function draw() {
     // setTimeout(() => requestAnimationFrame(draw), 200);
-    requestAnimationFrame(draw);
+    // requestAnimationFrame(draw);
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     ctx.fillStyle = "#000000";
