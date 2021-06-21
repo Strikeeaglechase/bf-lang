@@ -36,6 +36,7 @@ export interface Meta {
 	frames: Frame[];
 	idxs: { codeIndex: number, memAddr: number }[];
 	parts: { name: string, start: number, end: number, color: string }[];
+	types: Record<string, string[]>
 }
 class Scope {
 	parent: Scope;
@@ -113,17 +114,20 @@ function isArr(maybeArr: AST.VarDeclare): maybeArr is AST.ArrayVarDeclare {
 	return maybeArr.isArray
 }
 class Compiler {
-	globalScope: Scope = new Scope(this, null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
-	// scopes: Scope[] = [this.globalScope];
-
 	mathIdx: number = MATH_SEG_START;
 	funcs: AST.FunctionDef[] = [];
-	stack: Frame[] = [new Frame(this.globalScope, 0)]; // Where function returns should put their value
 
-	idxs: { codeIndex: number, memAddr: number }[] = []; // Debug info for bf executor
+	// -- Debug -- 
+	idxs: { codeIndex: number, memAddr: number }[] = [];
+	typeDefs: Record<string, string[]> = { "num": ["_prime"] };
+
+	// -- Memory -- 
+	globalScope: Scope = new Scope(this, null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
+	stack: Frame[] = [new Frame(this.globalScope, 0)]; // Where function returns should put their value
 	frames: Frame[] = [this.stack[0]];
 	types: Map<string, Type> = new Map([["num", numType]]);
 
+	// -- Program --
 	prog: AST.Prog;
 	_currentMemAddr: number = 0;
 	code: string = ""; // Result
@@ -143,6 +147,7 @@ class Compiler {
 	exportMeta(): Meta {
 		return {
 			frames: this.frames,
+			types: this.typeDefs,
 			idxs: [],// this.idxs,
 			parts: [
 				{
@@ -223,12 +228,22 @@ class Compiler {
 	handleTypeDef(def: AST.TypeDef) {
 		let totalSize = 1;
 		const keys = new Map<string, TypeKey>();
+		const flatType: string[] = []; // Debug
 		def.fields.forEach(field => {
 			const type = this.types.get(field.type);
 			keys.set(field.name, { type: type, index: totalSize });
+			this.typeDefs[type.name].forEach((key, idx) => {
+				if (type.name == "num") {
+					flatType[totalSize + idx] = field.name;
+				} else {
+					flatType[totalSize + idx] = key;
+				}
+			});
 			totalSize += type.size;
 		});
 		keys.set("_prime", { type: null, index: 0 });
+		flatType[0] = "_prime";
+		this.typeDefs[def.name] = flatType;
 		this.types.set(def.name, {
 			name: def.name,
 			keys: keys,
@@ -238,24 +253,9 @@ class Compiler {
 	defineFunc(funcDef: AST.FunctionDef) {
 		this.funcs.push(funcDef);
 	}
-	copyVariable(varRef: AST.VarRef, loc: number) {
-		const varDecl = this.frame.scope.getVar(varRef.name);
-		if (!varDecl.isArray) {
-			// Move each value of the object to new location
-			for (let i = 0; i < varDecl.type.size; i++) {
-				this.copy(varDecl.idx + i, loc + i);
-			}
-		} else {
-			for (let arrIdx = 0; arrIdx < varDecl.length; arrIdx++) {
-				for (let i = 0; i < varDecl.type.size; i++) {
-					this.goto(IDX_TEMP_STORE);
-					this.makeValue(arrIdx)
-				}
-			}
-		}
-	}
 	refrenceFunc(ref: AST.FunctionRef) {
 		const def = this.funcs.find(f => f.name == ref.name);
+		const prevScope = this.frame.scope;
 		// Push onto call stack
 		const scope = new Scope(this, this.globalScope, this.frame.scope);
 		this.stack.push(new Frame(scope, this.currentMemAddr));
@@ -267,8 +267,14 @@ class Compiler {
 		def.args.forEach((arg, idx) => {
 			const varDef = this.frame.scope.getVar(arg.name);
 			if (ref.args[idx].type == AST.NodeType.varRefrence) {
+				const created = this.frame.scope.getVar(arg.name);
 				const varRef = ref.args[idx] as AST.VarRef;
-				this.copyVariable(varRef, varDef.idx);
+				if (varRef.idx != null || varRef.path.length > 0) {
+					// Need to preform a copy
+					// if (varRef.idx) { }
+				} else {
+					created.idx = prevScope.getVar(varRef.name).idx;
+				}
 			} else {
 				this.goto(MATH_TEMP_STORE);
 				this.calcValue(ref.args[idx]);
@@ -300,30 +306,67 @@ class Compiler {
 			this.code += `<`.repeat(totalLen);
 		}
 	}
+	copyFullVar(varDef: VarDef, refPath: string[], offset: number, dst: number) {
+		const path = this.getOffsetFromPath(varDef.type, refPath);
+		for (let idx = 0; idx < path.curType.size; idx++) {
+			this.copy(varDef.idx + path.offset + idx, dst + offset + idx);
+		}
+	}
+	copyArrObj(arrDef: VarDef): VarDef {
+		const tempVar = this.frame.scope.defVar({
+			type: AST.NodeType.varDeclare,
+			isArray: false,
+			name: "_temp",
+			valType: arrDef.type.name,
+			value: { type: AST.NodeType.value, value: 0 }
+		});
+		for (let idx = 0; idx < arrDef.type.size; idx++) {
+			this.fetchFromArray(arrDef.idx, arrDef.type.size, idx, tempVar.idx + idx);
+		}
+		return tempVar;
+	}
 	setVar(assignment: AST.Assign) {
 		const varDef = this.frame.scope.getVar(assignment.varName);
-		const offset = this.getOffsetFromPath(varDef.type, assignment.path);
-		if (assignment.idx) {
-			// If there is an idx then is an array
-
-			// @ts-ignore
-			// this.debug(`${assignment.varName}[${assignment.idx.value}]=${assignment.value.value}`);
+		const { offset } = this.getOffsetFromPath(varDef.type, assignment.path);
+		if (assignment.idx != null) {
 			// Compute and store index
 			this.goto(MATH_TEMP_STORE);
 			this.calcValue(assignment.idx);
 			this.move(MATH_TEMP_STORE, ARR_IDX_SET_STORE);
 
-			// Compute value (storing at MATH_TEMP_STORE)
-			this.goto(MATH_TEMP_STORE);
-			this.calcValue(assignment.value);
+			if (assignment.value.type == AST.NodeType.varRefrence) {
+				let copyVarDef = this.frame.scope.getVar(assignment.value.name);
+				if (assignment.value.idx != null) {
+					this.goto(MATH_TEMP_STORE);
+					this.calcValue(assignment.value.idx);
+					this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
+					copyVarDef = this.copyArrObj(copyVarDef)
+				}
+				const path = this.getOffsetFromPath(copyVarDef.type, assignment.value.path);
+				this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
+				for (let idx = 0; idx < path.curType.size; idx++) {
+					this.copy(copyVarDef.idx + path.offset + idx, MATH_TEMP_STORE);
+					this.setArrayValue(varDef.idx, varDef.type.size, offset + idx);
+				}
+			} else {
+				// Compute value (storing at MATH_TEMP_STORE)
+				this.goto(MATH_TEMP_STORE);
+				this.calcValue(assignment.value);
 
-			// Move index into active indexing cell
-			this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
-			this.setArrayValue(varDef.idx, varDef.type.size, offset);
+				// Move index into active indexing cell
+				this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
+				this.setArrayValue(varDef.idx, varDef.type.size, offset);
+			}
 		} else {
-			this.goto(MATH_TEMP_STORE);
-			this.calcValue(assignment.value);
-			this.move(MATH_TEMP_STORE, varDef.idx + offset);
+			if (assignment.value.type == AST.NodeType.varRefrence) {
+				// Assigment is direct var copy
+				const copyVarDef = this.frame.scope.getVar(assignment.value.name);
+				this.copyFullVar(copyVarDef, assignment.value.path, offset, varDef.idx);
+			} else {
+				this.goto(MATH_TEMP_STORE);
+				this.calcValue(assignment.value);
+				this.move(MATH_TEMP_STORE, varDef.idx + offset);
+			}
 		}
 	}
 	calcValue(expr: AST.AnyAST) {
@@ -431,12 +474,12 @@ class Compiler {
 			offset += curType.keys.get(item).index;
 			curType = curType.keys.get(item).type;
 		});
-		return offset;
+		return { offset, curType };
 	}
 	getVarVal(ref: AST.VarRef) {
 		const varDef = this.frame.scope.getVar(ref.name);
-		const offset = this.getOffsetFromPath(varDef.type, ref.path);
-		if (!ref.idx) {
+		const { offset } = this.getOffsetFromPath(varDef.type, ref.path.length > 0 ? ref.path : ["_prime"]);
+		if (ref.idx == null) {
 			this.copy(varDef.idx, this.currentMemAddr);
 		} else {
 			// We have an idx, must be array
@@ -455,7 +498,7 @@ class Compiler {
 		const szR = '>'.repeat(arrUnitSize);
 		const szL = '<'.repeat(arrUnitSize);
 
-		this.move(IDX_TEMP_STORE, arrIdx + 4);
+		this.copy(IDX_TEMP_STORE, arrIdx + 4);
 		this.goto(arrIdx + 4);
 
 		this.code += `[-<<+<+>>>]`;	 									// Copy idx
@@ -483,7 +526,7 @@ class Compiler {
 		const szL = '<'.repeat(arrUnitSize);
 
 		this.move(MATH_TEMP_STORE, arrIdx + 3);
-		this.move(IDX_TEMP_STORE, arrIdx + 4);
+		this.copy(IDX_TEMP_STORE, arrIdx + 4);
 		this.goto(arrIdx + 4);
 
 		this.code += `[[->>${szR}+${szL}<<]<[->>${szR}+${szL}<<]>+${szR}>>-]` // Move to dst

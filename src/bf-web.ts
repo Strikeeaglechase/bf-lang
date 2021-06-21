@@ -110,30 +110,10 @@ function findPart(idx: number) {
 	if (part) { return part }
 	return { color: "#ffffff" }
 }
-function flatType(type: any): { name: string, idx: number }[] {
-	console.log(type);
-	let curOffset = 0;
-	let types = [];
-	function recurse(parentName: string, typ: any) {
-		Object.keys(typ.keys).forEach(name => {
-			console.log(`Handleing key ${name}`);
-			if (typ.keys[name].type) {
-				console.log(`Key has type, recursing with offset ${typ.keys[name].index}`);
-				curOffset = curOffset + typ.keys[name].index;
-				recurse(name, typ.keys[name].type);
-			} else {
-				console.log(`Key has no subtype, setting for parent "${parentName}" ${curOffset}+${typ.keys[name].index}`);
-				types[curOffset + typ.keys[name].index] = name == "_prime" ? parentName : name;
-			}
-		});
-	}
-	recurse("", type);
-	console.log(types);
-	return;
-}
 function drawMem(x: number, y: number): number {
 	let lines = 3;
 	let curArrs: VarDef[] = [];
+	let curVars: VarDef[] = [];
 	for (let i = 0; i < 256; i++) {
 		let xStep = X_SPACE;
 		if (bf.ptr == i) {
@@ -157,9 +137,15 @@ function drawMem(x: number, y: number): number {
 			}
 			if (curArrs[idx] && i >= (curArrs[idx].idx + curArrs[idx].length * (curArrs[idx].type.size + 2)) + 3) curArrs[idx] = null;
 			if (curArrs[idx]) {
+				const subcell = (i - curArrs[idx].idx - 5) % (curArrs[idx].type.size + 2);
 				const index = ((i - curArrs[idx].idx) - 5) / (curArrs[idx].type.size + 2);
-				if (index >= 0 && (i - curArrs[idx].idx - 5) % (curArrs[idx].type.size + 2) == 0) ctx.fillText(index.toString(), x, y + 20);
-				flatType(curArrs[idx].type);
+				if (index >= 0 && subcell == 0) ctx.fillText(index.toString(), x, y + 20);
+				const type = meta.types[curArrs[idx].type.name];
+				const name = type[subcell];
+				if (name) {
+					const dispName = name == "_prime" ? (subcell > 0 ? "P" : "") : name;
+					ctx.fillText(dispName, x, y + 20);
+				}
 			}
 		});
 
@@ -175,7 +161,7 @@ function drawMem(x: number, y: number): number {
 }
 function draw() {
 	// setTimeout(() => requestAnimationFrame(draw), 200);
-	// requestAnimationFrame(draw);
+	requestAnimationFrame(draw);
 	canvas.width = window.innerWidth;
 	canvas.height = window.innerHeight;
 
@@ -193,19 +179,19 @@ function draw() {
 
 	x = X_SPACE * 1.5;
 	y += Y_SPACE * 5;
-	for (let i = 0; i < bf.ops.length; i++) {
-		if (bf.idx == i) {
-			ctx.fillStyle = "#ff0000";
-		} else {
-			ctx.fillStyle = "#ffffff";
-		}
-		ctx.fillText(bf.ops[i], x, y);
-		x += ctx.measureText(bf.ops[i]).width + 5;
-		if (x > canvas.width - X_SPACE * 2) {
-			x = X_SPACE * 1.5;
-			y += Y_SPACE;
-		}
-	}
+	// for (let i = 0; i < bf.ops.length; i++) {
+	// 	if (bf.idx == i) {
+	// 		ctx.fillStyle = "#ff0000";
+	// 	} else {
+	// 		ctx.fillStyle = "#ffffff";
+	// 	}
+	// 	ctx.fillText(bf.ops[i], x, y);
+	// 	x += ctx.measureText(bf.ops[i]).width + 5;
+	// 	if (x > canvas.width - X_SPACE * 2) {
+	// 		x = X_SPACE * 1.5;
+	// 		y += Y_SPACE;
+	// 	}
+	// }
 }
 draw();
 console.log(meta);

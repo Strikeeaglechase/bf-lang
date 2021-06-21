@@ -87,12 +87,14 @@ function isArr(maybeArr) {
 }
 class Compiler {
     constructor(prog) {
-        this.globalScope = new Scope(this, null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
-        // scopes: Scope[] = [this.globalScope];
         this.mathIdx = MATH_SEG_START;
         this.funcs = [];
+        // -- Debug -- 
+        this.idxs = [];
+        this.typeDefs = { "num": ["_prime"] };
+        // -- Memory -- 
+        this.globalScope = new Scope(this, null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
         this.stack = [new Frame(this.globalScope, 0)]; // Where function returns should put their value
-        this.idxs = []; // Debug info for bf executor
         this.frames = [this.stack[0]];
         this.types = new Map([["num", numType]]);
         this._currentMemAddr = 0;
@@ -112,6 +114,7 @@ class Compiler {
     exportMeta() {
         return {
             frames: this.frames,
+            types: this.typeDefs,
             idxs: [],
             parts: [
                 {
@@ -210,12 +213,23 @@ class Compiler {
     handleTypeDef(def) {
         let totalSize = 1;
         const keys = new Map();
+        const flatType = []; // Debug
         def.fields.forEach(field => {
             const type = this.types.get(field.type);
             keys.set(field.name, { type: type, index: totalSize });
+            this.typeDefs[type.name].forEach((key, idx) => {
+                if (type.name == "num") {
+                    flatType[totalSize + idx] = field.name;
+                }
+                else {
+                    flatType[totalSize + idx] = key;
+                }
+            });
             totalSize += type.size;
         });
         keys.set("_prime", { type: null, index: 0 });
+        flatType[0] = "_prime";
+        this.typeDefs[def.name] = flatType;
         this.types.set(def.name, {
             name: def.name,
             keys: keys,
@@ -288,28 +302,68 @@ class Compiler {
             this.code += `<`.repeat(totalLen);
         }
     }
+    copyFullVar(varDef, refPath, offset, dst) {
+        const path = this.getOffsetFromPath(varDef.type, refPath);
+        for (let idx = 0; idx < path.curType.size; idx++) {
+            this.copy(varDef.idx + path.offset + idx, dst + offset + idx);
+        }
+    }
+    copyArrObj(arrDef) {
+        const tempVar = this.frame.scope.defVar({
+            type: AST.NodeType.varDeclare,
+            isArray: false,
+            name: "_temp",
+            valType: arrDef.type.name,
+            value: { type: AST.NodeType.value, value: 0 }
+        });
+        for (let idx = 0; idx < arrDef.type.size; idx++) {
+            this.fetchFromArray(arrDef.idx, arrDef.type.size, idx, tempVar.idx + idx);
+        }
+        return tempVar;
+    }
     setVar(assignment) {
         const varDef = this.frame.scope.getVar(assignment.varName);
-        const offset = this.getOffsetFromPath(varDef.type, assignment.path);
+        const { offset } = this.getOffsetFromPath(varDef.type, assignment.path);
         if (assignment.idx) {
-            // If there is an idx then is an array
-            // @ts-ignore
-            // this.debug(`${assignment.varName}[${assignment.idx.value}]=${assignment.value.value}`);
             // Compute and store index
             this.goto(MATH_TEMP_STORE);
             this.calcValue(assignment.idx);
             this.move(MATH_TEMP_STORE, ARR_IDX_SET_STORE);
-            // Compute value (storing at MATH_TEMP_STORE)
-            this.goto(MATH_TEMP_STORE);
-            this.calcValue(assignment.value);
-            // Move index into active indexing cell
-            this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
-            this.setArrayValue(varDef.idx, varDef.type.size, offset);
+            if (assignment.value.type == AST.NodeType.varRefrence) {
+                let copyVarDef = this.frame.scope.getVar(assignment.value.name);
+                if (assignment.value.idx) {
+                    this.goto(MATH_TEMP_STORE);
+                    this.calcValue(assignment.value.idx);
+                    this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
+                    copyVarDef = this.copyArrObj(copyVarDef);
+                }
+                const path = this.getOffsetFromPath(copyVarDef.type, assignment.value.path);
+                this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
+                for (let idx = 0; idx < path.curType.size; idx++) {
+                    this.copy(copyVarDef.idx + path.offset + idx, MATH_TEMP_STORE);
+                    this.setArrayValue(varDef.idx, varDef.type.size, offset + idx);
+                }
+            }
+            else {
+                // Compute value (storing at MATH_TEMP_STORE)
+                this.goto(MATH_TEMP_STORE);
+                this.calcValue(assignment.value);
+                // Move index into active indexing cell
+                this.move(ARR_IDX_SET_STORE, IDX_TEMP_STORE);
+                this.setArrayValue(varDef.idx, varDef.type.size, offset);
+            }
         }
         else {
-            this.goto(MATH_TEMP_STORE);
-            this.calcValue(assignment.value);
-            this.move(MATH_TEMP_STORE, varDef.idx + offset);
+            if (assignment.value.type == AST.NodeType.varRefrence) {
+                // Assigment is direct var copy
+                const copyVarDef = this.frame.scope.getVar(assignment.value.name);
+                this.copyFullVar(copyVarDef, assignment.value.path, offset, varDef.idx);
+            }
+            else {
+                this.goto(MATH_TEMP_STORE);
+                this.calcValue(assignment.value);
+                this.move(MATH_TEMP_STORE, varDef.idx + offset);
+            }
         }
     }
     calcValue(expr) {
@@ -421,11 +475,11 @@ class Compiler {
             offset += curType.keys.get(item).index;
             curType = curType.keys.get(item).type;
         });
-        return offset;
+        return { offset, curType };
     }
     getVarVal(ref) {
         const varDef = this.frame.scope.getVar(ref.name);
-        const offset = this.getOffsetFromPath(varDef.type, ref.path);
+        const { offset } = this.getOffsetFromPath(varDef.type, ref.path.length > 0 ? ref.path : ["_prime"]);
         if (!ref.idx) {
             this.copy(varDef.idx, this.currentMemAddr);
         }
@@ -445,7 +499,7 @@ class Compiler {
         const offL = '<'.repeat(objOffset);
         const szR = '>'.repeat(arrUnitSize);
         const szL = '<'.repeat(arrUnitSize);
-        this.move(IDX_TEMP_STORE, arrIdx + 4);
+        this.copy(IDX_TEMP_STORE, arrIdx + 4);
         this.goto(arrIdx + 4);
         this.code += `[-<<+<+>>>]`; // Copy idx
         this.code += `<<<[->>>+<<<]>>>`; // Put idx in pad and idxer
@@ -470,7 +524,7 @@ class Compiler {
         const szR = '>'.repeat(arrUnitSize);
         const szL = '<'.repeat(arrUnitSize);
         this.move(MATH_TEMP_STORE, arrIdx + 3);
-        this.move(IDX_TEMP_STORE, arrIdx + 4);
+        this.copy(IDX_TEMP_STORE, arrIdx + 4);
         this.goto(arrIdx + 4);
         this.code += `[[->>${szR}+${szL}<<]<[->>${szR}+${szL}<<]>+${szR}>>-]`; // Move to dst
         this.code += `>${offR}[-]${offL}<<[->>${offR}+${offL}<<]`; // Zero and store

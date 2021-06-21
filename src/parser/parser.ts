@@ -199,7 +199,6 @@ class Parser {
 			this.stream.next(); // Skip .
 			path.push(this.stream.next().value.toString());
 		}
-		if (path.length == 0) path = ["_prime"];
 		const nxt = this.stream.peak()?.value?.toString();
 		if (nxt == "=") {
 			this.stream.next();
@@ -225,7 +224,6 @@ class Parser {
 			this.stream.next(); // Skip .
 			path.push(this.stream.next().value.toString());
 		}
-		if (path.length == 0) path = ["_prime"];
 
 		const next = this.stream.peak()?.value?.toString();
 		switch (next) {

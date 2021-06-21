@@ -204,8 +204,6 @@ class Parser {
             this.stream.next(); // Skip .
             path.push(this.stream.next().value.toString());
         }
-        if (path.length == 0)
-            path = ["_prime"];
         const nxt = (_c = (_b = this.stream.peak()) === null || _b === void 0 ? void 0 : _b.value) === null || _c === void 0 ? void 0 : _c.toString();
         if (nxt == "=") {
             this.stream.next();
@@ -232,8 +230,6 @@ class Parser {
             this.stream.next(); // Skip .
             path.push(this.stream.next().value.toString());
         }
-        if (path.length == 0)
-            path = ["_prime"];
         const next = (_c = (_b = this.stream.peak()) === null || _b === void 0 ? void 0 : _b.value) === null || _c === void 0 ? void 0 : _c.toString();
         switch (next) {
             case "=":

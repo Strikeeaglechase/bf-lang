@@ -2,14 +2,6 @@ type Point {
 	num x
 	num y
 }
-type DoublePoint {
-	Point p1
-	Point p2
-}
-let DoublePoint points[5]
-// let num idx = 0
-// while(idx < 5) {
-// 	points[idx].x = idx
-// 	points[idx].y = idx*2
-// 	idx = idx + 1
-// }
+let Point points[5]
+points[1].x = 5
+points[2]=points[1]
