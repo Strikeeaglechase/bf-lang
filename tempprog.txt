@@ -1,0 +1,36 @@
+type Mover {
+	num x
+	num y
+	num tx 
+	num ty
+}
+let Mover m[1]
+func loop(num nil){
+	let num i=0
+	while(i<1){
+		let Mover mover = 0
+		mover = m[i]
+		
+		if(mover.x<mover.tx){ mover.x=mover.x+5 }
+		if(mover.x>mover.tx){ mover.x=mover.x-5 }
+		if(mover.y<mover.ty){ mover.y=mover.y+5 }
+		if(mover.y>mover.ty){ mover.y=mover.y-5 }
+		point(mover.x,mover.y,1)
+		
+		m[i] = mover
+		i=i+1
+	}
+}
+let num idx=0
+while(idx<1){
+	let Mover mvr = 0
+	mvr.x=rand(400)
+	mvr.y=rand(400)
+	mvr.tx=rand(400)
+	mvr.ty=rand(400)
+	m[idx]=mvr
+	idx = idx+1
+}
+while(1){
+	loop(0)
+}

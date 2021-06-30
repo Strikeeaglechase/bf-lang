@@ -3,7 +3,6 @@ import fs from "fs";
 import { Parser } from "./parser/parser.js";
 import { Tokenizer } from "./parser/tokenizer.js"
 import { optimize } from "./bf.js";
-
 const code = fs.readFileSync(`${process.cwd()}/../prog.txt`, "utf-8");
 const toks = new Tokenizer(code).parse();
 const ast = new Parser(toks).startParse();
@@ -13,6 +12,7 @@ try {
 	const bf = compiler.compile();
 	console.log(`BF: `);
 	console.log(bf);
+	fs.writeFileSync("../bf.txt", bf);
 	fs.writeFileSync("./meta.js", `export const meta = '${JSON.stringify(compiler.exportMeta())}'`);
 
 } catch (e) {

@@ -1,11 +1,21 @@
+import { BuiltinFunc, builtinFunctions } from "./builtins.js";
 import * as AST from "./parser/types/AST.js";
 const VAR_SPACE_START = 0; // Where we can declare variables
-const VAR_SPACE_LEN = 16; // This limits how many vars we can have
+const VAR_SPACE_LEN = 40; // This limits how many vars we can have
 
 const COPY_STORE_START = VAR_SPACE_START + VAR_SPACE_LEN;
 const COPY_STORE_LEN = 2; // A temp spot to handle copies
 
-const ARR_IDX_SET_STORE = COPY_STORE_START + COPY_STORE_LEN; // Storate for arrays being written to
+const DISPLAY_START = COPY_STORE_START + COPY_STORE_LEN;
+export const DISPLAY_TYPE = DISPLAY_START;
+export const DISPLAY_X = DISPLAY_START + 1;
+export const DISPLAY_Y = DISPLAY_START + 2;
+export const DISPLAY_ARG_0 = DISPLAY_START + 3;
+export const DISPLAY_ARG_1 = DISPLAY_START + 4;
+export const DISPLAY_COLOR = DISPLAY_START + 5
+export const DISPLAY_LEN = DISPLAY_COLOR + 1 - DISPLAY_START;
+
+const ARR_IDX_SET_STORE = DISPLAY_START + DISPLAY_LEN; // Storate for arrays being written to
 const IDX_TEMP_STORE = ARR_IDX_SET_STORE + 1 // Index for current array lookup
 const MATH_TEMP_STORE = IDX_TEMP_STORE + 1; // Store for math ops (primary result typically)
 
@@ -16,8 +26,6 @@ const A_OFFSET = 1; // A/B values for math ops
 const B_OFFSET = 2;
 
 const ARR_SEG_START = MATH_SEG_START + MATH_SEG_LEN;
-const ARR_UNIT_SIZE = 3;
-const ARR_PADDING = 3;
 // @ts-ignore stfu typescript ik it dosn't exist thats why im setting it
 Map.prototype.toJSON = function <T, V>(this: Map<T, V>) {
 	let obj: Record<string, V> = {};
@@ -34,10 +42,18 @@ export interface VarDef {
 }
 export interface Meta {
 	frames: Frame[];
+	counts: Record<string, number>;
 	idxs: { codeIndex: number, memAddr: number }[];
 	parts: { name: string, start: number, end: number, color: string }[];
 	types: Record<string, string[]>
 }
+interface TypeKey { index: number, type: Type }
+interface Type {
+	name: string;
+	keys: Map<string, TypeKey>;
+	size: number;
+}
+
 class Scope {
 	parent: Scope;
 	global: Scope;
@@ -55,6 +71,7 @@ class Scope {
 		let newDef: VarDef;
 		const type = this.compiler.types.get(def.valType);
 		if (def.isArray) {
+			this.arrIdx += type.size // Pre-padding
 			newDef = {
 				idx: this.arrIdx,
 				isArray: true,
@@ -79,7 +96,7 @@ class Scope {
 		const local = this.vars.find(v => v.name == varName);
 		if (local) return local;
 		if (this.global) return this.global.vars.find(v => v.name == varName);
-		throw `Undefined variable "${varName}"`;
+		throw new Error(`Undefined variable "${varName}"`);
 	}
 	toJSON() {
 		return {
@@ -97,14 +114,10 @@ class Frame {
 		this.ret = ret;
 	}
 }
-interface TypeKey { index: number, type: Type }
-interface Type {
-	name: string;
-	keys: Map<string, TypeKey>;
-	size: number;
-}
-// Array: [ref_result, pad, pad] [value_move, indexer, cell]
-//        header                 data
+
+// Array:[pad *size] [ref_result, pad, pad] [value_move, indexer, cell *size]
+//        prepad     header                 data
+//                       ^ arr idx
 const numType: Type = {
 	name: "num",
 	size: 1,
@@ -113,19 +126,42 @@ const numType: Type = {
 function isArr(maybeArr: AST.VarDeclare): maybeArr is AST.ArrayVarDeclare {
 	return maybeArr.isArray
 }
+const outputFormatted = false;
+function count(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+	const func = descriptor.value;
+	descriptor.value = function (...args: any[]) {
+		if (!this.counter[func.name]) this.counter[func.name] = 0
+		this.counter[func.name]++;
+
+		if (outputFormatted) {
+			this.code += `\n${func.name}(${args.join(", ")})\n`
+			this.indent++;
+			const start = this.code.length;
+			const ret = func.apply(this, args);
+			let edit = this.code.substring(start);
+			edit = edit.split("\n").map(part => "|" + " ".repeat(this.indent) + part);
+			this.code = this.code.substring(0, start) + edit.join("\n") + "\n";
+			this.indent--;
+			return ret;
+		} else return func.apply(this, args);
+	}
+	return descriptor;
+}
 class Compiler {
 	mathIdx: number = MATH_SEG_START;
-	funcs: AST.FunctionDef[] = [];
+	funcs: AST.FunctionDef[] = [].concat(builtinFunctions);
 
 	// -- Debug -- 
 	idxs: { codeIndex: number, memAddr: number }[] = [];
 	typeDefs: Record<string, string[]> = { "num": ["_prime"] };
+	counter: Record<string, number> = {};
 
 	// -- Memory -- 
 	globalScope: Scope = new Scope(this, null, null, VAR_SPACE_START + VAR_SPACE_LEN - 1, ARR_SEG_START);
-	stack: Frame[] = [new Frame(this.globalScope, 0)]; // Where function returns should put their value
+	stack: Frame[] = [new Frame(this.globalScope, 0)];
 	frames: Frame[] = [this.stack[0]];
 	types: Map<string, Type> = new Map([["num", numType]]);
+	indent: number = 0;
 
 	// -- Program --
 	prog: AST.Prog;
@@ -148,7 +184,8 @@ class Compiler {
 		return {
 			frames: this.frames,
 			types: this.typeDefs,
-			idxs: [],// this.idxs,
+			counts: this.counter,
+			idxs: this.idxs,
 			parts: [
 				{
 					name: "vars",
@@ -161,6 +198,12 @@ class Compiler {
 					start: COPY_STORE_START,
 					end: COPY_STORE_START + COPY_STORE_LEN,
 					color: "#069c24"
+				},
+				{
+					name: "display",
+					start: DISPLAY_START,
+					end: DISPLAY_START + DISPLAY_LEN,
+					color: "#1f9aad"
 				},
 				{
 					name: "stores",
@@ -207,7 +250,9 @@ class Compiler {
 		this.goto(MATH_TEMP_STORE);
 		this.calcValue(whileDef.condition);
 		this.code += `[`;
-		for (let i = 0; i < whileDef.inside.length; i++) this.compileNode(whileDef.inside[i]);
+		for (let i = 0; i < whileDef.inside.length; i++) {
+			this.compileNode(whileDef.inside[i]);
+		}
 		this.goto(MATH_TEMP_STORE);
 		this.calcValue(whileDef.condition);
 		this.code += `]`;
@@ -221,9 +266,21 @@ class Compiler {
 		this.code += `[-]]`;
 	}
 	return(ret: AST.Return) {
-		this.goto(MATH_TEMP_STORE);
-		this.calcValue(ret.value);
-		this.move(MATH_TEMP_STORE, this.frame.ret);
+		if (ret.value.type == AST.NodeType.varRefrence) {
+			const retVar = ret.value;
+			let retVarDef = this.frame.scope.getVar(retVar.name);
+			if (retVar.idx != null) {
+				this.goto(MATH_TEMP_STORE);
+				this.calcValue(retVar.idx);
+				this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
+				retVarDef = this.copyArrObj(retVarDef);
+			}
+			this.copyFullVar(retVarDef, retVar.path, 0, this.frame.ret);
+		} else {
+			this.goto(MATH_TEMP_STORE);
+			this.calcValue(ret.value);
+			this.move(MATH_TEMP_STORE, this.frame.ret);
+		}
 	}
 	handleTypeDef(def: AST.TypeDef) {
 		let totalSize = 1;
@@ -254,6 +311,7 @@ class Compiler {
 		this.funcs.push(funcDef);
 	}
 	refrenceFunc(ref: AST.FunctionRef) {
+		console.log(`Calling: ${ref.name}`);
 		const def = this.funcs.find(f => f.name == ref.name);
 		const prevScope = this.frame.scope;
 		// Push onto call stack
@@ -262,18 +320,22 @@ class Compiler {
 		this.frames.push(this.frame);
 
 		def.args.forEach(arg => this.createVar(arg));
-
 		// Setup args
 		def.args.forEach((arg, idx) => {
-			const varDef = this.frame.scope.getVar(arg.name);
+			const varDef = this.frame.scope.getVar(arg.name); // Var for function to use
 			if (ref.args[idx].type == AST.NodeType.varRefrence) {
-				const created = this.frame.scope.getVar(arg.name);
 				const varRef = ref.args[idx] as AST.VarRef;
 				if (varRef.idx != null || varRef.path.length > 0) {
-					// Need to preform a copy
-					// if (varRef.idx) { }
+					let copyVarDef = prevScope.getVar(varRef.name); // Var we are refrencing
+					if (varRef.idx != null) {
+						this.goto(MATH_TEMP_STORE);
+						this.calcValue(varRef.idx);
+						this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
+						copyVarDef = this.copyArrObj(copyVarDef);
+					}
+					this.copyFullVar(copyVarDef, varRef.path, 0, varDef.idx);
 				} else {
-					created.idx = prevScope.getVar(varRef.name).idx;
+					varDef.idx = prevScope.getVar(varRef.name).idx;
 				}
 			} else {
 				this.goto(MATH_TEMP_STORE);
@@ -281,13 +343,16 @@ class Compiler {
 				this.move(MATH_TEMP_STORE, varDef.idx);
 			}
 		});
-		let progIdx = 0;
-		while (progIdx < def.inside.length) {
-			const tree = def.inside[progIdx++];
-			this.compileNode(tree);
-			if (tree.type == AST.NodeType.return) break;
+		if (def.inside) {
+			let progIdx = 0;
+			while (progIdx < def.inside.length) {
+				const tree = def.inside[progIdx++];
+				this.compileNode(tree);
+				if (tree.type == AST.NodeType.return) break;
+			}
+		} else {
+			(def as BuiltinFunc).call.apply(this);
 		}
-
 		// Pop off stack elements
 		this.stack.pop();
 	}
@@ -360,7 +425,13 @@ class Compiler {
 		} else {
 			if (assignment.value.type == AST.NodeType.varRefrence) {
 				// Assigment is direct var copy
-				const copyVarDef = this.frame.scope.getVar(assignment.value.name);
+				let copyVarDef = this.frame.scope.getVar(assignment.value.name);
+				if (assignment.value.idx != null) {
+					this.goto(MATH_TEMP_STORE);
+					this.calcValue(assignment.value.idx);
+					this.move(MATH_TEMP_STORE, IDX_TEMP_STORE);
+					copyVarDef = this.copyArrObj(copyVarDef)
+				}
 				this.copyFullVar(copyVarDef, assignment.value.path, offset, varDef.idx);
 			} else {
 				this.goto(MATH_TEMP_STORE);
@@ -480,7 +551,7 @@ class Compiler {
 		const varDef = this.frame.scope.getVar(ref.name);
 		const { offset } = this.getOffsetFromPath(varDef.type, ref.path.length > 0 ? ref.path : ["_prime"]);
 		if (ref.idx == null) {
-			this.copy(varDef.idx, this.currentMemAddr);
+			this.copy(varDef.idx + offset, this.currentMemAddr);
 		} else {
 			// We have an idx, must be array
 			const target = this.currentMemAddr;
@@ -492,39 +563,43 @@ class Compiler {
 		}
 	}
 	// Assumes that IDX_TEMP_STORE has the array index offset
+	@count
 	fetchFromArray(arrIdx: number, arrUnitSize: number, objOffset: number, dst: number) {
 		const offR = '>'.repeat(objOffset);
 		const offL = '<'.repeat(objOffset);
 		const szR = '>'.repeat(arrUnitSize);
 		const szL = '<'.repeat(arrUnitSize);
-
+		this.goto(arrIdx);
+		this.makeValue(1);
 		this.copy(IDX_TEMP_STORE, arrIdx + 4);
 		this.goto(arrIdx + 4);
 
 		this.code += `[-<<+<+>>>]`;	 									// Copy idx
 		this.code += `<<<[->>>+<<<]>>>`;									// Put idx in pad and idxer
-		this.code += `[->>${szR}+${szL}<<]${szR}>>-`; 				// First index out step
-		this.code += `[[->>${szR}+${szL}<<]+${szR}>>-]+`;			// Remaining index out steps
+		this.code += `[[->>${szR}+${szL}<<]+${szR}>>-]+`;			// Index out to cell
 		this.code += `>${offR}[-<<${offL}+${offR}>>]${offL}<`;	// move value into hold
 		this.code += `[-<[-<<${szL}+${szR}>>]<${szL}]`;				// shift back to start
-		this.code += `<<[->>+<<]`;	 										// Move idx copy into idxer
+		this.code += `<[-${szR}>>+<<${szL}]${szR}>>`;				// Move value to correct spot for write
+		this.code += `<[->>+<<]`;	 										// Move idx copy into idxer
 		this.code += `>[-<+<+>>]`;	 										// Copy value
 		this.code += `<[->+<]`;	 											// Move value into val_cell
 		this.code += `<[-<+>]`;	 											// Shift other value into result
 		this.code += `>>>[[->>${szR}+${szL}<<]<[->>${szR}+${szL}<<]>+${szR}>>-]`; // Write out value
 		this.code += `<[->>${offR}+${offL}<<]`;	 					// Shift value into place
-		this.code += `<${szL}[-${szL}<<]${szR}<<`;	 				// Move back to start
+		this.code += `<${szL}[-${szL}<<]${szR}<<-`;	 				// Move back to start
 
 		this.currentMemAddr = arrIdx; // After all those ops this is where we end up
 		this.move(arrIdx, dst); // Move result to out
 	}
 	// Assumes IDX_TEMP_STORE and MATH_TEMP_STORE are set
+	@count
 	setArrayValue(arrIdx: number, arrUnitSize: number, objOffset: number) {
 		const offR = '>'.repeat(objOffset);
 		const offL = '<'.repeat(objOffset);
 		const szR = '>'.repeat(arrUnitSize);
 		const szL = '<'.repeat(arrUnitSize);
-
+		this.goto(arrIdx);
+		this.makeValue(1);
 		this.move(MATH_TEMP_STORE, arrIdx + 3);
 		this.copy(IDX_TEMP_STORE, arrIdx + 4);
 		this.goto(arrIdx + 4);
@@ -535,6 +610,7 @@ class Compiler {
 
 		this.currentMemAddr = arrIdx;
 	}
+	@count
 	copy(src: number, dst: number, blank = true) {
 		// Move value and duplicate
 		this.goto(src);
@@ -550,11 +626,13 @@ class Compiler {
 		this.move(COPY_STORE_START + 1, dst, blank);
 	}
 	// Assigns the value of the current mem loc
+	@count
 	makeValue(value: number) {
 		this.code += `[-]` // Set cell to zero
 		this.code += `+`.repeat(value);
 	}
 	// Move value from one loc to another
+	@count
 	move(start: number, end: number, blank = true) {
 		if (start == end) return;
 		if (blank) {
@@ -569,6 +647,8 @@ class Compiler {
 		this.code += `]`;
 	}
 	// Move pointer to a location
+	// @count(this.counter)
+	// @count
 	goto(idx: number) {
 		while (this.currentMemAddr != idx) {
 			if (this.currentMemAddr < idx) {

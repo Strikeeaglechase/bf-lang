@@ -12,6 +12,7 @@ const PRECEDENCE = {
 };
 class Parser {
 	stream: Stream<Token>;
+	curDeapth: number = 0;
 	constructor(input: Stream<Token>) {
 		this.stream = input;
 	}
@@ -74,11 +75,11 @@ class Parser {
 		this.stream.next(); // Skip '(';
 		const condition = this.expression(this.parse());
 		this.stream.next(); // Skip '{'
-
 		const trees: AST.AnyAST[] = [];
 		while (this.stream.peak().value != "}") {
 			trees.push(this.parse());
 		}
+		this.stream.next();
 		return {
 			type: AST.NodeType.while,
 			condition: condition,
@@ -94,6 +95,7 @@ class Parser {
 		while (this.stream.peak().value != "}") {
 			trees.push(this.parse());
 		}
+		this.stream.next();
 		return {
 			type: AST.NodeType.if,
 			condition: condition,
@@ -160,7 +162,7 @@ class Parser {
 		while (this.stream.peak().value != "}") {
 			trees.push(this.parse());
 		}
-
+		this.stream.next();
 		return {
 			type: AST.NodeType.functionDef,
 			name: name,

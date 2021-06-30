@@ -11,6 +11,7 @@ const PRECEDENCE = {
 };
 class Parser {
     constructor(input) {
+        this.curDeapth = 0;
         this.stream = input;
     }
     startParse() {
@@ -81,6 +82,7 @@ class Parser {
         while (this.stream.peak().value != "}") {
             trees.push(this.parse());
         }
+        this.stream.next();
         return {
             type: AST.NodeType.while,
             condition: condition,
@@ -95,6 +97,7 @@ class Parser {
         while (this.stream.peak().value != "}") {
             trees.push(this.parse());
         }
+        this.stream.next();
         return {
             type: AST.NodeType.if,
             condition: condition,
@@ -164,6 +167,7 @@ class Parser {
         while (this.stream.peak().value != "}") {
             trees.push(this.parse());
         }
+        this.stream.next();
         return {
             type: AST.NodeType.functionDef,
             name: name,

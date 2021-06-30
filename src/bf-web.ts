@@ -5,10 +5,54 @@ import { meta as metadata } from "./meta.js"
 const meta: Meta = JSON.parse(metadata);
 const X_SPACE = 25;
 const Y_SPACE = 20;
-const ops = "+-<>[].!".split("");
+const ops = "+-<>[].!*%".split("");
 let doExec = true;
 let numCalcs = 0;
 const MAX = 2 ** 16;
+enum ItemType {
+	point = 1
+}
+interface Item {
+	x: number;
+	y: number;
+	arg0: number;
+	arg1: number;
+	color: number;
+	type: ItemType;
+}
+class Display {
+	ctx: CanvasRenderingContext2D;
+	items: Item[] = [];
+	colors: { r: number, g: number, b: number }[] = [
+		{ r: 0, g: 0, b: 0 },
+		{ r: 255, g: 255, b: 255 },
+		{ r: 255, g: 0, b: 0 },
+		{ r: 0, g: 255, b: 0 },
+		{ r: 0, g: 0, b: 255 },
+	];
+	constructor(ctx: CanvasRenderingContext2D) {
+		this.ctx = ctx;
+	}
+	add(type: ItemType, x: number, y: number, arg0: number, arg1: number, color: number) {
+		this.items.push({ type, x, y, arg0, arg1, color });
+	}
+	draw(x: number, y: number, w: number, h: number) {
+		this.ctx.strokeStyle = `rgb(255,0,0)`;
+		this.ctx.fillStyle = `rgb(0,0,0)`;
+		this.ctx.fillRect(x, y, w, h);
+		this.ctx.strokeRect(x, y, w, h);
+		this.items.forEach(item => {
+			const color = this.colors[item.color];
+			this.ctx.fillStyle = `rgb(${color.r},${color.g},${color.b})`;
+			switch (item.type) {
+				case ItemType.point: ctx.fillRect(item.x + x, item.y + y, 1, 1); break;
+			}
+		});
+	}
+	clear() {
+		this.items = [];
+	}
+}
 class Brainfuck {
 	ops: Op[];
 	mem: number[] = new Array(2 ** 16).fill(0);
@@ -16,6 +60,7 @@ class Brainfuck {
 	idx: number = 0;
 	log: string = "";
 	optimize = false;
+	display: Display = new Display(ctx);
 	constructor(src: string) {
 		this.ops = src.split("") as Op[];
 	}
@@ -30,6 +75,7 @@ class Brainfuck {
 			this.ops = optimize(this.ops.join("")) as Op[]; // Lie about type
 		}
 		numCalcs = 0;
+		this.display.clear();
 	}
 	execute() {
 		let op = "";
@@ -69,6 +115,9 @@ class Brainfuck {
 				break;
 			case "[": if (this.mem[this.ptr] == 0) this.branchPast(); break;
 			case "]": if (this.mem[this.ptr] != 0) this.branchBack(); return;
+			// Below are custom modifications to bf, some for debugging some for other functionality
+			case "*": this.mem[this.ptr] = Math.floor(Math.random() * this.mem[this.ptr]); break;
+			case "%": this.handleDrawCall(); break;
 			case "!":
 				doExec = false;
 				let str = "";
@@ -79,11 +128,12 @@ class Brainfuck {
 				this.idx++;
 				console.log(str);
 				break;
+
 		}
 		const compilerLoc = meta.idxs.find(idx => idx.codeIndex == this.idx - 1);
 		if (compilerLoc && compilerLoc.memAddr != this.ptr) {
-			// console.log(`Code idx: ${this.idx} => C: ${compilerLoc.memAddr}, R: ${this.ptr}`);
-			// doExec = false;
+			console.log(`Code idx: ${this.idx} => C: ${compilerLoc.memAddr}, R: ${this.ptr}`);
+			doExec = false;
 		}
 	}
 	branchPast() {
@@ -97,6 +147,30 @@ class Brainfuck {
 		while (d != 0) this.ops[this.idx--] == "[" ? d-- : this.ops[this.idx + 1] == "]" ? d++ : null;
 		this.idx++;
 	}
+	handleDrawCall() {
+		this.display.add(
+			this.mem[this.ptr + 0],
+			this.mem[this.ptr + 1],
+			this.mem[this.ptr + 2],
+			this.mem[this.ptr + 3],
+			this.mem[this.ptr + 4],
+			this.mem[this.ptr + 5],
+		)
+	}
+}
+const ratio = 255 / 31;
+function encodeColor(r: number, g: number, b: number) {
+	let int = 0;
+	int += (r / ratio) << 10
+	int += (g / ratio) << 5
+	int += (b / ratio)
+	return int
+}
+function decodeColor(int: number) {
+	let r = (int & 0b0111110000000000 >> 10) * ratio
+	let g = (int & 0b0000001111100000 >> 5) * ratio
+	let b = (int & 0b0000000000011111) * ratio
+	return { r, g, b }
 }
 const canvas = document.getElementById("main") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d");
@@ -111,7 +185,7 @@ function findPart(idx: number) {
 	return { color: "#ffffff" }
 }
 function drawMem(x: number, y: number): number {
-	let lines = 3;
+	let lines = 2;
 	let curArrs: VarDef[] = [];
 	let curVars: VarDef[] = [];
 	for (let i = 0; i < 256; i++) {
@@ -122,6 +196,7 @@ function drawMem(x: number, y: number): number {
 			ctx.fillStyle = findPart(i).color;
 		}
 		ctx.fillText(bf.mem[i].toString(), x, y);
+		xStep = Math.max(xStep, ctx.measureText(bf.mem[i].toString()).width + 10);
 
 		// Check if there are vars/arrs
 		meta.frames.forEach((frame, idx) => {
@@ -175,23 +250,30 @@ function draw() {
 
 	y += Y_SPACE;
 	ctx.fillText(numCalcs.toString(), X_SPACE * 1.5, y);
-	if (doExec) for (let i = 0; i < 100; i++) bf.execute();
+	for (let i = 0; i < 10000 && doExec; i++) bf.execute();
 
 	x = X_SPACE * 1.5;
-	y += Y_SPACE * 5;
-	// for (let i = 0; i < bf.ops.length; i++) {
-	// 	if (bf.idx == i) {
-	// 		ctx.fillStyle = "#ff0000";
+	y += Y_SPACE * 3;
+	Object.keys(meta.counts).forEach(key => {
+		ctx.fillText(`${key} - ${meta.counts[key]}`, x, y);
+		y += Y_SPACE;
+	});
+	// y += Y_SPACE;
+	// bf.ops.forEach((op, idx) => {
+	// 	if (idx == bf.idx) {
+	// 		ctx.fillStyle = "#ff0000"
 	// 	} else {
 	// 		ctx.fillStyle = "#ffffff";
 	// 	}
-	// 	ctx.fillText(bf.ops[i], x, y);
-	// 	x += ctx.measureText(bf.ops[i]).width + 5;
+	// 	ctx.fillText(op, x, y);
+	// 	x += 10
 	// 	if (x > canvas.width - X_SPACE * 2) {
 	// 		x = X_SPACE * 1.5;
-	// 		y += Y_SPACE;
+	// 		y += Y_SPACE
 	// 	}
-	// }
+	// });
+	y += Y_SPACE;
+	bf.display.draw(X_SPACE * 1.5, y, canvas.width - X_SPACE * 3, canvas.height - y - Y_SPACE);
 }
 draw();
 console.log(meta);
@@ -199,5 +281,5 @@ document.addEventListener("keydown", (e) => {
 	if (e.key == " ") {
 		bf.execute();
 	}
-	if (e.key == "Enter") doExec = true;
+	if (e.key == "Enter") doExec = !doExec;
 });

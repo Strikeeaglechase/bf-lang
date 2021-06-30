@@ -11,6 +11,7 @@ try {
     const bf = compiler.compile();
     console.log(`BF: `);
     console.log(bf);
+    fs.writeFileSync("../bf.txt", bf);
     fs.writeFileSync("./meta.js", `export const meta = '${JSON.stringify(compiler.exportMeta())}'`);
 }
 catch (e) {

@@ -6,7 +6,8 @@
 		"allowSyntheticDefaultImports": true,
 		"outDir": "dist/",
 		"baseUrl": "./src",
-		"lib": ["ES2019", "DOM"]
+		"lib": ["ES2019", "DOM"],
+		"experimentalDecorators": true
 	},
-	"include": ["src/"]
+	"include": ["src/"],
 }
