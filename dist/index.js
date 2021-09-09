@@ -1,8 +1,8 @@
-import { Compiler } from "./compiler.js";
 import fs from "fs";
+import { Compiler } from "./compiler.js";
 import { Parser } from "./parser/parser.js";
 import { Tokenizer } from "./parser/tokenizer.js";
-const code = fs.readFileSync(`${process.cwd()}/../prog.txt`, "utf-8");
+const code = fs.readFileSync(`${process.cwd()}/../programs/prog.txt`, "utf-8");
 const toks = new Tokenizer(code).parse();
 const ast = new Parser(toks).startParse();
 fs.writeFileSync(`../out.json`, JSON.stringify(ast));
@@ -17,5 +17,3 @@ try {
 catch (e) {
     console.error(e);
 }
-// console.log(`Optimized BF: `);
-// console.log(optimize(bf).join(""));
